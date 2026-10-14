@@ -118,6 +118,9 @@ public enum ExtensionMethod {
     // Prism → extension
     public static let initialize = "initialize"
     public static let commandRun = "command.run"
+    public static let listLoad = "list.load"
+    public static let detailLoad = "detail.load"
+    public static let actionPerform = "action.perform"
     public static let widgetLoad = "widget.load"
     public static let statusSubscribe = "status.subscribe"
     public static let statusUnsubscribe = "status.unsubscribe"
@@ -161,6 +164,56 @@ public struct ExtensionCommandParams: Hashable, Codable, Sendable {
     public let commandID: String
 
     public init(commandID: String) { self.commandID = commandID }
+}
+
+/// `list.load`: the first load, a reload, a query change (when the list
+/// filters itself), or a ⌘P filter change.
+public struct ExtensionListParams: Hashable, Codable, Sendable {
+    public let commandID: String
+    public let query: String
+    /// The chosen `filters` ID, or `nil` for none.
+    public let filter: String?
+
+    public init(commandID: String, query: String = "", filter: String? = nil) {
+        self.commandID = commandID
+        self.query = query
+        self.filter = filter
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case commandID, query, filter
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        commandID = try container.decode(String.self, forKey: .commandID)
+        query = try container.decodeIfPresent(String.self, forKey: .query) ?? ""
+        filter = try container.decodeIfPresent(String.self, forKey: .filter)
+    }
+}
+
+/// `detail.load`: the selected item's detail, when the list did not include it.
+public struct ExtensionDetailParams: Hashable, Codable, Sendable {
+    public let commandID: String
+    public let itemID: String
+
+    public init(commandID: String, itemID: String) {
+        self.commandID = commandID
+        self.itemID = itemID
+    }
+}
+
+/// `action.perform`: one of an item's `perform` actions, named by ID.
+public struct ExtensionActionParams: Hashable, Codable, Sendable {
+    public let commandID: String
+    public let itemID: String
+    public let actionID: String
+
+    public init(commandID: String, itemID: String, actionID: String) {
+        self.commandID = commandID
+        self.itemID = itemID
+        self.actionID = actionID
+    }
 }
 
 public struct ExtensionWidgetParams: Hashable, Codable, Sendable {

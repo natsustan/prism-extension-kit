@@ -110,6 +110,50 @@ public actor ExtensionRuntime {
                 // Commands usually change what a live row shows.
                 await runtime.refreshAllStatuses()
             }
+        case ExtensionMethod.listLoad:
+            guard let list = try? params.decode(ExtensionListParams.self) else {
+                return reply(id, error: "Invalid list.load parameters.")
+            }
+            start(id) { runtime, context in
+                do {
+                    let result = try await runtime.extensionValue.list(
+                        command: list.commandID, query: list.query, filter: list.filter, context: context
+                    )
+                    await runtime.reply(id, encoding: result)
+                } catch {
+                    await runtime.reply(id, error: Self.message(for: error))
+                }
+            }
+        case ExtensionMethod.detailLoad:
+            guard let detail = try? params.decode(ExtensionDetailParams.self) else {
+                return reply(id, error: "Invalid detail.load parameters.")
+            }
+            start(id) { runtime, context in
+                do {
+                    let result = try await runtime.extensionValue.detail(
+                        command: detail.commandID, item: detail.itemID, context: context
+                    )
+                    await runtime.reply(id, encoding: result)
+                } catch {
+                    await runtime.reply(id, error: Self.message(for: error))
+                }
+            }
+        case ExtensionMethod.actionPerform:
+            guard let action = try? params.decode(ExtensionActionParams.self) else {
+                return reply(id, error: "Invalid action.perform parameters.")
+            }
+            start(id) { runtime, context in
+                let result: ExtensionActionResult
+                do {
+                    result = try await runtime.extensionValue.perform(
+                        action: action.actionID, item: action.itemID, command: action.commandID, context: context
+                    )
+                } catch {
+                    result = ExtensionActionResult(.failed(message: Self.message(for: error)))
+                }
+                await runtime.reply(id, encoding: result)
+                await runtime.refreshAllStatuses()
+            }
         case ExtensionMethod.widgetLoad:
             guard let widget = try? params.decode(ExtensionWidgetParams.self) else {
                 return reply(id, error: "Invalid widget.load parameters.")
