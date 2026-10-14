@@ -122,6 +122,7 @@ public enum ExtensionMethod {
     public static let detailLoad = "detail.load"
     public static let actionPerform = "action.perform"
     public static let widgetLoad = "widget.load"
+    public static let preferencesItems = "preferences.items"
     public static let statusSubscribe = "status.subscribe"
     public static let statusUnsubscribe = "status.unsubscribe"
     public static let cancel = "cancel"
@@ -130,6 +131,7 @@ public enum ExtensionMethod {
     public static let statusUpdate = "status.update"
     public static let stateWrite = "state.write"
     public static let taskStart = "task.start"
+    public static let listChanged = "list.changed"
     public static let log = "log"
 }
 
@@ -214,6 +216,22 @@ public struct ExtensionActionParams: Hashable, Codable, Sendable {
         self.itemID = itemID
         self.actionID = actionID
     }
+}
+
+/// `preferences.items`: the entries of an `orderedList` preference.
+public struct ExtensionPreferenceItemsParams: Hashable, Codable, Sendable {
+    public let preferenceID: String
+
+    public init(preferenceID: String) { self.preferenceID = preferenceID }
+}
+
+/// `list.changed` (extension → Prism): the data behind a list command
+/// changed, for example after a background refresh. Prism reloads the list
+/// if it is on screen; otherwise the notification is ignored.
+public struct ExtensionListChangedParams: Hashable, Codable, Sendable {
+    public let commandID: String
+
+    public init(commandID: String) { self.commandID = commandID }
 }
 
 public struct ExtensionWidgetParams: Hashable, Codable, Sendable {

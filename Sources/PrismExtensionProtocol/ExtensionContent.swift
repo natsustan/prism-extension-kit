@@ -153,14 +153,78 @@ public struct ExtensionToggleCard: Hashable, Codable, Sendable {
     }
 }
 
+/// Data for the quota templates: a few gauges, each with a short value.
+/// Values arrive formatted; the card only lays them out.
+public struct ExtensionQuotaCard: Hashable, Codable, Sendable {
+    public let items: [ExtensionQuotaItem]
+    /// Shown when there are no items ("No agents enabled").
+    public let emptyText: String?
+    /// Clicking the card runs this command, or opens it when it is a list.
+    public let openCommandID: String?
+
+    public init(items: [ExtensionQuotaItem], emptyText: String? = nil, openCommandID: String? = nil) {
+        self.items = items
+        self.emptyText = emptyText
+        self.openCommandID = openCommandID
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case items, emptyText, openCommandID
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = try container.decodeIfPresent([ExtensionQuotaItem].self, forKey: .items) ?? []
+        emptyText = try container.decodeIfPresent(String.self, forKey: .emptyText)
+        openCommandID = try container.decodeIfPresent(String.self, forKey: .openCommandID)
+    }
+}
+
+public struct ExtensionQuotaItem: Hashable, Codable, Sendable, Identifiable {
+    public let id: String
+    public let title: String
+    /// Drawn inside the ring.
+    public let icon: ExtensionIcon?
+    /// `nil` when there is nothing to measure; the card shows `status` or
+    /// `value` without a gauge.
+    public let meter: ExtensionMeter?
+    /// The figure: "42%", "$3.10".
+    public let value: String
+    /// A small line under the figure ("2h 13m").
+    public let caption: String?
+    /// A short problem ("Sign In") shown in place of the figure.
+    public let status: String?
+
+    public init(
+        id: String,
+        title: String,
+        icon: ExtensionIcon? = nil,
+        meter: ExtensionMeter? = nil,
+        value: String,
+        caption: String? = nil,
+        status: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.icon = icon
+        self.meter = meter
+        self.value = value
+        self.caption = caption
+        self.status = status
+    }
+}
+
 /// `widget.load` result, one case per template. Wire form: the template's
 /// fields plus `"template": "<name>"`.
 public enum ExtensionWidgetContent: Hashable, Codable, Sendable {
     case toggleCard(ExtensionToggleCard)
+    /// One of the quota templates.
+    case quota(ExtensionWidgetTemplate, ExtensionQuotaCard)
 
     public var template: ExtensionWidgetTemplate {
         switch self {
         case .toggleCard: .toggleCard
+        case let .quota(template, _): template
         }
     }
 
@@ -170,8 +234,11 @@ public enum ExtensionWidgetContent: Hashable, Codable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(ExtensionWidgetTemplate.self, forKey: .template) {
-        case .toggleCard: self = .toggleCard(try ExtensionToggleCard(from: decoder))
+        let template = try container.decode(ExtensionWidgetTemplate.self, forKey: .template)
+        if template.isQuota {
+            self = .quota(template, try ExtensionQuotaCard(from: decoder))
+        } else {
+            self = .toggleCard(try ExtensionToggleCard(from: decoder))
         }
     }
 
@@ -180,6 +247,7 @@ public enum ExtensionWidgetContent: Hashable, Codable, Sendable {
         try container.encode(template, forKey: .template)
         switch self {
         case let .toggleCard(card): try card.encode(to: encoder)
+        case let .quota(_, card): try card.encode(to: encoder)
         }
     }
 }

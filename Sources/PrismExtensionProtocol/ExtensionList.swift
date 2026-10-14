@@ -53,7 +53,7 @@ public struct ExtensionList: Hashable, Codable, Sendable {
         self.filters = filters
         self.emptyMessage = emptyMessage
         self.showsDetail = showsDetail ?? items.contains { $0.detail != nil }
-        self.fetchedAt = fetchedAt.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded()) }
+        self.fetchedAt = ExtensionWireDate.rounded(fetchedAt)
         self.error = error
     }
 
@@ -70,9 +70,7 @@ public struct ExtensionList: Hashable, Codable, Sendable {
         emptyMessage = try container.decodeIfPresent(ExtensionListMessage.self, forKey: .emptyMessage)
         showsDetail = try container.decodeIfPresent(Bool.self, forKey: .showsDetail)
             ?? items.contains { $0.detail != nil }
-        // Whole seconds survive the round trip through `Date` exactly.
-        fetchedAt = try container.decodeIfPresent(Double.self, forKey: .fetchedAt)
-            .map { Date(timeIntervalSince1970: $0.rounded()) }
+        fetchedAt = try container.decodeDateIfPresent(forKey: .fetchedAt)
         error = try container.decodeIfPresent(String.self, forKey: .error)
     }
 
@@ -85,7 +83,7 @@ public struct ExtensionList: Hashable, Codable, Sendable {
         try container.encode(filters, forKey: .filters)
         try container.encodeIfPresent(emptyMessage, forKey: .emptyMessage)
         try container.encode(showsDetail, forKey: .showsDetail)
-        try container.encodeIfPresent(fetchedAt?.timeIntervalSince1970, forKey: .fetchedAt)
+        try container.encodeDateIfPresent(fetchedAt, forKey: .fetchedAt)
         try container.encodeIfPresent(error, forKey: .error)
     }
 
@@ -124,6 +122,8 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
     public let detail: ExtensionDetail?
     /// The first action runs on Return; all of them are in the ⌘K panel.
     public let actions: [ExtensionAction]
+    /// This item is being refreshed; Prism shows a spinner beside it.
+    public let isLoading: Bool
 
     public init(
         id: String,
@@ -134,7 +134,8 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
         keywords: [String] = [],
         section: String? = nil,
         detail: ExtensionDetail? = nil,
-        actions: [ExtensionAction] = []
+        actions: [ExtensionAction] = [],
+        isLoading: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -145,10 +146,11 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
         self.section = section
         self.detail = detail
         self.actions = actions
+        self.isLoading = isLoading
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, subtitle, icon, accessories, keywords, section, detail, actions
+        case id, title, subtitle, icon, accessories, keywords, section, detail, actions, isLoading
     }
 
     public init(from decoder: any Decoder) throws {
@@ -162,6 +164,7 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
         section = try container.decodeIfPresent(String.self, forKey: .section)
         detail = try container.decodeIfPresent(ExtensionDetail.self, forKey: .detail)
         actions = try container.decodeIfPresent([ExtensionAction].self, forKey: .actions) ?? []
+        isLoading = try container.decodeIfPresent(Bool.self, forKey: .isLoading) ?? false
     }
 
     /// The default action: what Return does.
@@ -176,7 +179,7 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
         let kept = actions.filter { seen.insert($0.id).inserted }.prefix(Self.maximumActions)
         return ExtensionListItem(
             id: id, title: title, subtitle: subtitle, icon: icon, accessories: accessories,
-            keywords: keywords, section: section, detail: detail, actions: Array(kept)
+            keywords: keywords, section: section, detail: detail, actions: Array(kept), isLoading: isLoading
         )
     }
 }
@@ -188,12 +191,18 @@ public struct ExtensionListAccessory: Hashable, Codable, Sendable {
     /// Semantic tint, as for icons. Secondary when omitted.
     public let tint: String?
     public let help: String?
+    /// A small ring before the text.
+    public let meter: ExtensionMeter?
 
-    public init(text: String? = nil, symbol: String? = nil, tint: String? = nil, help: String? = nil) {
+    public init(
+        text: String? = nil, symbol: String? = nil, tint: String? = nil, help: String? = nil,
+        meter: ExtensionMeter? = nil
+    ) {
         self.text = text
         self.symbol = symbol
         self.tint = tint
         self.help = help
+        self.meter = meter
     }
 }
 
@@ -227,34 +236,128 @@ public struct ExtensionListMessage: Hashable, Codable, Sendable {
 /// The detail pane for one item (`detail.load`, or inline in the item):
 /// Markdown text above labelled metadata rows.
 public struct ExtensionDetail: Hashable, Codable, Sendable {
+    /// An optional header above the content.
+    public let title: String?
+    public let subtitle: String?
+    public let icon: ExtensionIcon?
+    /// When this item's data was fetched; Prism shows a live "Updated …" line.
+    public let updatedAt: Date?
+    public let notice: ExtensionNotice?
     public let markdown: String?
+    /// Blocks of rows under the Markdown; rows can carry meters.
+    public let sections: [ExtensionDetailSection]
+    /// The Information block pinned to the bottom of the pane.
     public let metadata: [ExtensionMetadataRow]
 
-    public init(markdown: String? = nil, metadata: [ExtensionMetadataRow] = []) {
+    public init(
+        title: String? = nil,
+        subtitle: String? = nil,
+        icon: ExtensionIcon? = nil,
+        updatedAt: Date? = nil,
+        notice: ExtensionNotice? = nil,
+        markdown: String? = nil,
+        sections: [ExtensionDetailSection] = [],
+        metadata: [ExtensionMetadataRow] = []
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.updatedAt = ExtensionWireDate.rounded(updatedAt)
+        self.notice = notice
         self.markdown = markdown
+        self.sections = sections
         self.metadata = metadata
     }
 
     private enum CodingKeys: String, CodingKey {
-        case markdown, metadata
+        case title, subtitle, icon, updatedAt, notice, markdown, sections, metadata
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        icon = try container.decodeIfPresent(ExtensionIcon.self, forKey: .icon)
+        updatedAt = try container.decodeDateIfPresent(forKey: .updatedAt)
+        notice = try container.decodeIfPresent(ExtensionNotice.self, forKey: .notice)
         markdown = try container.decodeIfPresent(String.self, forKey: .markdown)
+        sections = try container.decodeIfPresent([ExtensionDetailSection].self, forKey: .sections) ?? []
         metadata = try container.decodeIfPresent([ExtensionMetadataRow].self, forKey: .metadata) ?? []
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(subtitle, forKey: .subtitle)
+        try container.encodeIfPresent(icon, forKey: .icon)
+        try container.encodeDateIfPresent(updatedAt, forKey: .updatedAt)
+        try container.encodeIfPresent(notice, forKey: .notice)
+        try container.encodeIfPresent(markdown, forKey: .markdown)
+        try container.encode(sections, forKey: .sections)
+        try container.encode(metadata, forKey: .metadata)
+    }
+
+    /// Nothing to show: no header, text, or rows.
+    public var isEmpty: Bool {
+        title == nil && notice == nil && (markdown ?? "").isEmpty && sections.allSatisfy(\.rows.isEmpty)
+            && metadata.isEmpty
     }
 }
 
+/// A labelled value. In detail sections a row can carry a meter (drawn as a
+/// bar with a reset countdown) or a date (drawn as a date and a countdown).
 public struct ExtensionMetadataRow: Hashable, Codable, Sendable {
+    public enum Style: String, Hashable, Codable, Sendable {
+        case plain
+        /// The value reads as a state pill ("Disabled").
+        case badge
+    }
+
     public let label: String
     public let value: String
     public let symbol: String?
+    public let style: Style
+    public let meter: ExtensionMeter?
+    public let date: Date?
 
-    public init(label: String, value: String, symbol: String? = nil) {
+    public init(
+        label: String,
+        value: String = "",
+        symbol: String? = nil,
+        style: Style = .plain,
+        meter: ExtensionMeter? = nil,
+        date: Date? = nil
+    ) {
         self.label = label
         self.value = value
         self.symbol = symbol
+        self.style = style
+        self.meter = meter
+        self.date = ExtensionWireDate.rounded(date)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case label, value, symbol, style, meter, date
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        label = try container.decode(String.self, forKey: .label)
+        value = try container.decodeIfPresent(String.self, forKey: .value) ?? ""
+        symbol = try container.decodeIfPresent(String.self, forKey: .symbol)
+        style = try container.decodeIfPresent(Style.self, forKey: .style) ?? .plain
+        meter = try container.decodeIfPresent(ExtensionMeter.self, forKey: .meter)
+        date = try container.decodeDateIfPresent(forKey: .date)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(label, forKey: .label)
+        try container.encode(value, forKey: .value)
+        try container.encodeIfPresent(symbol, forKey: .symbol)
+        try container.encode(style, forKey: .style)
+        try container.encodeIfPresent(meter, forKey: .meter)
+        try container.encodeDateIfPresent(date, forKey: .date)
     }
 }
 

@@ -43,10 +43,15 @@ public struct ExtensionIcon: Hashable, Codable, Sendable {
     public let symbol: String
     /// Semantic tile tint resolved by the presentation layer.
     public let tint: String
+    /// A template image drawn instead of the tile, such as a brand mark. Only
+    /// bundled extensions can use it in this version: it names an image in
+    /// Prism's asset catalog. External extensions get the symbol tile.
+    public let image: String?
 
-    public init(symbol: String, tint: String) {
+    public init(symbol: String, tint: String, image: String? = nil) {
         self.symbol = symbol
         self.tint = tint
+        self.image = image
     }
 }
 
@@ -143,6 +148,16 @@ public enum ExtensionValue: Hashable, Codable, Sendable {
         if case let .bool(value) = self { return value }
         return nil
     }
+
+    public var stringValue: String? {
+        if case let .string(value) = self { return value }
+        return nil
+    }
+
+    public var numberValue: Double? {
+        if case let .number(value) = self { return value }
+        return nil
+    }
 }
 
 public enum ExtensionPreferenceType: String, Hashable, Codable, Sendable {
@@ -181,9 +196,27 @@ public struct ExtensionPreference: Hashable, Codable, Sendable, Identifiable {
     }
 }
 
-public enum ExtensionWidgetTemplate: String, Hashable, Codable, Sendable {
+public enum ExtensionWidgetTemplate: String, Hashable, Codable, Sendable, CaseIterable {
     /// A small on/off card; clicking runs the content's toggle command.
     case toggleCard
+    /// Quota cards: two items as rings, numbers, or labelled bars, or the
+    /// first item alone as a ring or a number. Content is `ExtensionQuotaCard`.
+    case quotaRings
+    case quotaNumbers
+    case quotaBars
+    case quotaRing
+    case quotaNumber
+
+    public var isQuota: Bool { self != .toggleCard }
+
+    /// How many items the card shows.
+    public var quotaCapacity: Int {
+        switch self {
+        case .quotaRing, .quotaNumber: 1
+        case .toggleCard: 0
+        case .quotaRings, .quotaNumbers, .quotaBars: 2
+        }
+    }
 }
 
 public struct ExtensionWidget: Hashable, Codable, Sendable, Identifiable {

@@ -154,6 +154,18 @@ public actor ExtensionRuntime {
                 await runtime.reply(id, encoding: result)
                 await runtime.refreshAllStatuses()
             }
+        case ExtensionMethod.preferencesItems:
+            guard let request = try? params.decode(ExtensionPreferenceItemsParams.self) else {
+                return reply(id, error: "Invalid preferences.items parameters.")
+            }
+            start(id) { runtime, context in
+                do {
+                    let items = try await runtime.extensionValue.preferenceItems(request.preferenceID, context: context)
+                    await runtime.reply(id, encoding: ExtensionPreferenceItems(items: items))
+                } catch {
+                    await runtime.reply(id, error: Self.message(for: error))
+                }
+            }
         case ExtensionMethod.widgetLoad:
             guard let widget = try? params.decode(ExtensionWidgetParams.self) else {
                 return reply(id, error: "Invalid widget.load parameters.")
@@ -204,7 +216,7 @@ public actor ExtensionRuntime {
         let context = makeContext(requestID: id)
         requests[id] = Task {
             await work(self, context)
-            await self.requestFinished(id)
+            self.requestFinished(id)
         }
     }
 
@@ -268,6 +280,10 @@ public actor ExtensionRuntime {
             return
         }
         notify(ExtensionMethod.taskStart, ExtensionTaskStartParams(requestID: requestID, taskID: taskID, arguments: arguments))
+    }
+
+    func listChanged(_ commandID: String) {
+        notify(ExtensionMethod.listChanged, ExtensionListChangedParams(commandID: commandID))
     }
 
     func log(_ message: String) {

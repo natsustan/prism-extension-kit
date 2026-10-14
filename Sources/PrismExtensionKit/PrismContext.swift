@@ -31,6 +31,13 @@ public struct PrismContext: Sendable {
         await runtime.startTask(taskID, arguments: arguments, requestID: requestID)
     }
 
+    /// Tells Prism that a list command's data changed (`list.changed`), for
+    /// example when a refresh started by an earlier load finishes. Prism
+    /// reloads the list if it is on screen.
+    public func listChanged(_ command: String) async {
+        await runtime.listChanged(command)
+    }
+
     /// Writes a line to Prism's log for this extension.
     public func log(_ message: String) async {
         await runtime.log(message)
@@ -66,16 +73,10 @@ public struct Preferences: Sendable {
         if case let .strings(value)? = values[id] { return value }
         return []
     }
-}
 
-public extension ExtensionValue {
-    var stringValue: String? {
-        if case let .string(value) = self { return value }
-        return nil
-    }
-
-    var numberValue: Double? {
-        if case let .number(value) = self { return value }
-        return nil
+    /// An `orderedList` preference: the user's order and switches. Resolve
+    /// it against your items with `enabledIDs(with:)`.
+    public func orderedList(_ id: String) -> ExtensionOrderedList {
+        ExtensionOrderedList(value: values[id])
     }
 }

@@ -38,6 +38,10 @@ public protocol PrismExtension: Sendable {
     /// `ExtensionActionResult(..., reload: true)` when the list changed.
     func perform(action: String, item: String, command: String, context: PrismContext) async throws -> ExtensionActionResult
 
+    /// `preferences.items`: the entries of an `orderedList` preference, with
+    /// their default switches. Prism asks when its settings pane opens.
+    func preferenceItems(_ preference: String, context: PrismContext) async throws -> [ExtensionPreferenceItem]
+
     /// The live status for a command declared with `"liveStatus": true`.
     /// Prism asks while the row is visible, again after every command, and
     /// every `statusRefreshInterval`. `nil` keeps the row's static subtitle.
@@ -70,6 +74,10 @@ public extension PrismExtension {
 
     func status(for command: String, context: PrismContext) async throws -> ExtensionRowStatus? {
         nil
+    }
+
+    func preferenceItems(_ preference: String, context: PrismContext) async throws -> [ExtensionPreferenceItem] {
+        []
     }
 
     func widget(_ widget: String, context: PrismContext) async throws -> ExtensionWidgetContent {

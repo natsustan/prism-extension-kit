@@ -126,7 +126,7 @@ struct ExtensionRuntimeTests {
         await send(runtime, #"{"id":3,"method":"command.run","params":{"commandID":"nap"}}"#)
         await send(runtime, #"{"id":4,"method":"command.run","params":{"commandID":"slow"}}"#)
         await send(runtime, #"{"method":"cancel","params":{"id":4}}"#)
-        await send(runtime, #"{"id":5,"method":"preferences.items","params":{}}"#)
+        await send(runtime, #"{"id":5,"method":"background.refresh","params":{}}"#)
         await send(runtime, "not json")
         await settle(runtime)
 
@@ -142,7 +142,7 @@ struct ExtensionRuntimeTests {
             return
         }
         #expect(!message.isEmpty)
-        #expect(recorder.response(5)?.error?.message == "Unsupported method preferences.items.")
+        #expect(recorder.response(5)?.error?.message == "Unsupported method background.refresh.")
         #expect(!recorder.notifications("log").isEmpty)
     }
 }
