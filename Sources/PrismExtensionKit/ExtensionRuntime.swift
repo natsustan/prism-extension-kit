@@ -40,9 +40,23 @@ public actor ExtensionRuntime {
         dup2(STDERR_FILENO, STDOUT_FILENO)
         let protocolOutput = FileHandle(fileDescriptor: protocolDescriptor, closeOnDealloc: true)
         let runtime = ExtensionRuntime(extensionValue, output: { protocolOutput.write($0) })
+        // Framed like Prism frames them: at "\n" only. `bytes.lines` would
+        // also break at CR, U+2028, and U+2029, which JSON strings may hold.
+        let chunks = AsyncStream<Data> { continuation in
+            FileHandle.standardInput.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                    continuation.finish()
+                } else {
+                    continuation.yield(data)
+                }
+            }
+        }
+        var buffer = ExtensionLineBuffer()
         do {
-            for try await line in FileHandle.standardInput.bytes.lines {
-                await runtime.receive(Data(line.utf8))
+            for await chunk in chunks {
+                for line in try buffer.append(chunk) { await runtime.receive(line) }
             }
         } catch {
             FileHandle.standardError.write(Data("Reading from Prism failed: \(error)\n".utf8))

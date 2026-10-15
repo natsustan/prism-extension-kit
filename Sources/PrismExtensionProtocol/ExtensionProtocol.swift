@@ -346,15 +346,17 @@ public struct ExtensionLineBuffer: Sendable {
     public mutating func append(_ data: Data) throws -> [Data] {
         buffer.append(data)
         var lines = [Data]()
-        while let newline = buffer.firstIndex(of: 0x0A) {
-            let line = buffer[buffer.startIndex..<newline]
+        var start = buffer.startIndex
+        while let newline = buffer[start...].firstIndex(of: 0x0A) {
+            let line = buffer[start..<newline]
             if line.count > maximumLineLength {
                 buffer = Data()
                 throw Failure.lineTooLong
             }
             if !line.isEmpty { lines.append(Data(line)) }
-            buffer = Data(buffer[buffer.index(after: newline)...])
+            start = buffer.index(after: newline)
         }
+        buffer = Data(buffer[start...])
         if buffer.count > maximumLineLength {
             buffer = Data()
             throw Failure.lineTooLong

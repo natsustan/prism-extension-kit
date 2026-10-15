@@ -91,8 +91,9 @@ A list item is `{"id", "title", "subtitle", "icon", "accessories", "keywords",
 "section", "detail", "actions"}`; only `id` and `title` are required, and IDs
 must stay the same across reloads. An action is `{"id", "title", "symbol",
 "kind": "perform" | "copy" | "open", "text" | "url", "style": "destructive",
-"shortcut": "cmd+shift+c", "confirmationMessage"}`. The first action runs on
-Return. `query` is empty unless the list sets `"filtering": "extension"`;
+"shortcut": "cmd+shift+c", "confirmationMessage"}`; destructive actions, and
+any action with a `confirmationMessage`, ask before they run. The first action
+runs on Return. `query` is empty unless the list sets `"filtering": "extension"`;
 `filter` is `null` until the user picks one of `filters` with ⌘P.
 
 Gauges use a meter, `{"fraction": 0...1, "tone": "normal" | "warning" |

@@ -388,7 +388,8 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
     public let style: Style
     /// A key equivalent such as `"cmd+d"` or `"cmd+shift+c"`.
     public let shortcut: ExtensionShortcut?
-    /// The confirmation's explanation for a destructive action.
+    /// The confirmation's explanation. Destructive actions always confirm;
+    /// any other action with a message confirms too.
     public let confirmationMessage: String?
 
     public init(
