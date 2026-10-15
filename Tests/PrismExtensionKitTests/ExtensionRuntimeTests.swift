@@ -50,6 +50,8 @@ struct Counter: PrismExtension {
     }
 
     func status(for command: String, context: PrismContext) async throws -> ExtensionRowStatus? {
+        // Ignored: status reads cannot save state.
+        await context.setState(.string("status"), for: "mark")
         let count = Int(await context.state("count")?.numberValue ?? 0)
         return ExtensionRowStatus(text: "Count \(count)", isLive: true)
     }
@@ -124,6 +126,13 @@ struct ExtensionRuntimeTests {
         await send(runtime, #"{"id":4,"method":"command.run","params":{"commandID":"increment"}}"#)
         await settle(runtime)
         #expect(try statuses() == ["Count 0", "Count 1"])
+
+        // The status reads' writes were neither sent nor kept.
+        let keys = try recorder.notifications("state.write").map { try #require($0.params).decode(ExtensionStateWriteParams.self).key }
+        #expect(!keys.contains("mark"))
+        await send(runtime, #"{"id":5,"method":"command.run","params":{"commandID":"mark"}}"#)
+        await settle(runtime)
+        #expect(try recorder.response(5)?.result?.decode(ExtensionCommandResult.self) == .keepOpen(message: "unset"))
     }
 
     @Test("a canceled request's later state write changes nothing")

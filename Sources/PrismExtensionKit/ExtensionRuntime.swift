@@ -291,16 +291,18 @@ public actor ExtensionRuntime {
     // MARK: - Calls into Prism
 
     func setState(_ value: ExtensionValue?, for key: String, requestID: Int?) {
-        if let requestID {
-            // Prism drops writes from a request that ended or was canceled,
-            // so the copy here must not keep them either.
-            guard requests[requestID] != nil, !canceledRequests.contains(requestID) else {
-                log("Ignored a state write from request \(requestID), which already ended.")
-                return
-            }
+        // Prism saves writes only from a request still in flight, so the copy
+        // here must not keep any other: one from a status read, or from a
+        // request that ended or was canceled.
+        guard let requestID else {
+            log("Ignored a state write made outside a request.")
+            return
+        }
+        guard requests[requestID] != nil, !canceledRequests.contains(requestID) else {
+            log("Ignored a state write from request \(requestID), which already ended.")
+            return
         }
         state[key] = value
-        guard let requestID else { return }
         notify(ExtensionMethod.stateWrite, ExtensionStateWriteParams(requestID: requestID, key: key, value: value))
     }
 
