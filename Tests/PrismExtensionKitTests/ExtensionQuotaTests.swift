@@ -97,6 +97,23 @@ struct ExtensionQuotaTests {
         #expect(moved.moving("missing", onto: "grok", items: items) == moved)
     }
 
+    @Test("preferences group by section in first-appearance order")
+    func preferenceSections() throws {
+        let manifest = try decode(ExtensionManifest.self, #"""
+        {"protocol": 1, "id": "dev.example.agents", "name": "Agents", "version": "1.0.0", "author": "Example",
+         "preferences": [
+           {"id": "agents", "type": "orderedList", "title": "Shown Agents", "section": "Agents"},
+           {"id": "compact", "type": "bool", "title": "Compact"},
+           {"id": "key", "type": "secret", "title": "API Key", "section": "Account"},
+           {"id": "remaining", "type": "bool", "title": "Remaining", "section": "Agents"},
+           {"id": "plain", "type": "text", "title": "Plain", "section": ""}
+         ]}
+        """#)
+        let sections = manifest.preferenceSections
+        #expect(sections.map(\.title) == ["Agents", nil, "Account"])
+        #expect(sections.map { $0.preferences.map(\.id) } == [["agents", "remaining"], ["compact", "plain"], ["key"]])
+    }
+
     @Test("the runtime answers preferences.items and sends list.changed")
     func runtime() async throws {
         let recorder = OutputRecorder()

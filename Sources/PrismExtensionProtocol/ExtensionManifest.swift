@@ -175,23 +175,29 @@ public struct ExtensionPreference: Hashable, Codable, Sendable, Identifiable {
     public let title: String
     public let caption: String?
     public let defaultValue: ExtensionValue?
+    /// The settings group heading. Preferences sharing one are shown together,
+    /// in the order the group first appears; those without one go under
+    /// "Options".
+    public let section: String?
 
     public init(
         id: String,
         type: ExtensionPreferenceType,
         title: String,
         caption: String? = nil,
-        defaultValue: ExtensionValue? = nil
+        defaultValue: ExtensionValue? = nil,
+        section: String? = nil
     ) {
         self.id = id
         self.type = type
         self.title = title
         self.caption = caption
         self.defaultValue = defaultValue
+        self.section = section
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, title, caption
+        case id, type, title, caption, section
         case defaultValue = "default"
     }
 }
@@ -377,6 +383,21 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
 
     public func preference(id: String) -> ExtensionPreference? {
         preferences.first { $0.id == id }
+    }
+
+    /// Preferences grouped for settings: one group per `section`, in the order
+    /// each first appears; preferences without a section share one untitled group.
+    public var preferenceSections: [(title: String?, preferences: [ExtensionPreference])] {
+        var groups: [(title: String?, preferences: [ExtensionPreference])] = []
+        for preference in preferences {
+            let title = preference.section.flatMap { $0.isEmpty ? nil : $0 }
+            if let index = groups.firstIndex(where: { $0.title == title }) {
+                groups[index].preferences.append(preference)
+            } else {
+                groups.append((title, [preference]))
+            }
+        }
+        return groups
     }
 
     public func widget(id: String) -> ExtensionWidget? {
