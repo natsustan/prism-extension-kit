@@ -46,7 +46,8 @@ Each method answers one part of `manifest.json`: `run` for commands,
 with `"liveStatus": true`, `widget` for widgets, and `preferenceItems` for
 `orderedList` preferences. `print` goes to stderr, which Prism keeps for
 diagnostics. Keep anything that must last in Prism (`context.setState`);
-Prism stops idle extensions.
+Prism stops idle extensions. A write made after the request replied, or after
+Prism canceled it, is ignored on both sides.
 
 ## Testing an extension
 

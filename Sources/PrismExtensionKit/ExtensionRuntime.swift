@@ -16,6 +16,9 @@ public actor ExtensionRuntime {
     private var preferences = Preferences([:])
     private var dataDirectory: URL?
     private var requests: [Int: Task<Void, Never>] = [:]
+    /// Requests Prism canceled. They may still be running, but Prism no
+    /// longer accepts their writes.
+    private var canceledRequests: Set<Int> = []
     /// Live status sessions: session → command, with an optional refresh loop.
     private var sessions: [String: String] = [:]
     private var refreshers: [String: Task<Void, Never>] = [:]
@@ -217,7 +220,9 @@ public actor ExtensionRuntime {
             refreshers.removeValue(forKey: unsubscribe.session)?.cancel()
         case ExtensionMethod.cancel:
             guard let cancel = try? params.decode(ExtensionCancelParams.self) else { return }
-            requests[cancel.id]?.cancel()
+            guard let request = requests[cancel.id] else { return }
+            canceledRequests.insert(cancel.id)
+            request.cancel()
         case ExtensionMethod.willTerminate:
             exit()
         default:
@@ -238,6 +243,7 @@ public actor ExtensionRuntime {
 
     private func requestFinished(_ id: Int) {
         requests[id] = nil
+        canceledRequests.remove(id)
     }
 
     private func makeContext(requestID: Int?) -> PrismContext {
@@ -285,6 +291,14 @@ public actor ExtensionRuntime {
     // MARK: - Calls into Prism
 
     func setState(_ value: ExtensionValue?, for key: String, requestID: Int?) {
+        if let requestID {
+            // Prism drops writes from a request that ended or was canceled,
+            // so the copy here must not keep them either.
+            guard requests[requestID] != nil, !canceledRequests.contains(requestID) else {
+                log("Ignored a state write from request \(requestID), which already ended.")
+                return
+            }
+        }
         state[key] = value
         guard let requestID else { return }
         notify(ExtensionMethod.stateWrite, ExtensionStateWriteParams(requestID: requestID, key: key, value: value))

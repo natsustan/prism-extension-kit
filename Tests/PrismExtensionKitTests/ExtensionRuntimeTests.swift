@@ -37,6 +37,13 @@ struct Counter: PrismExtension {
         case "slow":
             try await Task.sleep(for: .seconds(30))
             return .done
+        case "stubborn":
+            // Ignores cancellation, then writes anyway.
+            try? await Task.sleep(for: .seconds(30))
+            await context.setState(.string("late"), for: "mark")
+            return .done
+        case "mark":
+            return .keepOpen(message: await context.state("mark")?.stringValue ?? "unset")
         default:
             throw PrismExtensionError("No such command.")
         }
@@ -117,6 +124,19 @@ struct ExtensionRuntimeTests {
         await send(runtime, #"{"id":4,"method":"command.run","params":{"commandID":"increment"}}"#)
         await settle(runtime)
         #expect(try statuses() == ["Count 0", "Count 1"])
+    }
+
+    @Test("a canceled request's later state write changes nothing")
+    func canceledStateWrite() async throws {
+        let (runtime, recorder) = await initialized()
+        await send(runtime, #"{"id":2,"method":"command.run","params":{"commandID":"stubborn"}}"#)
+        await send(runtime, #"{"method":"cancel","params":{"id":2}}"#)
+        await settle(runtime)
+        #expect(recorder.notifications("state.write").isEmpty)
+
+        await send(runtime, #"{"id":3,"method":"command.run","params":{"commandID":"mark"}}"#)
+        await settle(runtime)
+        #expect(try recorder.response(3)?.result?.decode(ExtensionCommandResult.self) == .keepOpen(message: "unset"))
     }
 
     @Test("widgets, task starts, cancellation, and unknown methods")
