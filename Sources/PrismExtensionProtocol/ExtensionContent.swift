@@ -252,7 +252,7 @@ public enum ExtensionWidgetContent: Hashable, Codable, Sendable {
     }
 }
 
-/// Serializes protocol values the way the stdio transport will. Bundled
+/// Serializes protocol values the way the stdio transport will. In-process
 /// extensions skip the transport; Debug builds and tests round-trip their
 /// values through this to keep them representable on the wire.
 public enum ExtensionWire {

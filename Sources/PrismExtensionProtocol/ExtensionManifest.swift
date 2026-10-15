@@ -297,8 +297,7 @@ public struct ExtensionCapability: RawRepresentable, Hashable, Codable, Sendable
     public static let hostTasks: Self = "hostTasks"
 }
 
-/// The declarative description of an extension — `manifest.json` for external
-/// extensions, a Swift value for bundled ones.
+/// The declarative description of an extension: its `manifest.json`.
 public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
     /// The newest protocol this Prism build understands.
     public static let supportedProtocolVersion = 1
@@ -311,7 +310,8 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
     public let summary: String?
     public let minPrism: String?
     public let icon: ExtensionIcon
-    /// Relative path inside the package; absent for bundled extensions.
+    /// Relative path inside the extension's folder; absent for an in-process
+    /// extension (tests).
     public let executable: String?
     public let commands: [ExtensionCommand]
     public let preferences: [ExtensionPreference]
@@ -420,8 +420,9 @@ public enum ExtensionManifestError: Error, Equatable, Sendable {
 }
 
 public extension ExtensionManifest {
-    /// Structural checks shared by bundled registration, local import, and the
-    /// Gallery lint. `allowsReservedNamespace` is only true for bundled manifests.
+    /// Structural checks shared by local import, Gallery installs, and the
+    /// extensions repository's lint. `allowsReservedNamespace` admits Prism's
+    /// own `prism.*` extensions.
     func validate(allowsReservedNamespace: Bool = false) throws {
         guard protocolVersion >= 1, protocolVersion <= Self.supportedProtocolVersion else {
             throw ExtensionManifestError.unsupportedProtocol(protocolVersion)

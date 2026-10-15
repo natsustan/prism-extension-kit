@@ -93,7 +93,7 @@ public enum ExtensionFolderValidator {
         case let .invalidID(id):
             "“\(id)” is not a valid extension ID. Use lowercase owner.name, such as octocat.focus-flag."
         case let .reservedID(id):
-            "“\(id)” uses the prism. namespace, which is reserved for extensions bundled with Prism."
+            "“\(id)” uses the prism. namespace, which is reserved for Prism's own extensions."
         case let .emptyField(field):
             "The manifest field “\(field)” is empty."
         case let .duplicateID(kind, id):
