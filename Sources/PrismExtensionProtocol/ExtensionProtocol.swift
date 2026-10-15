@@ -141,24 +141,30 @@ public struct ExtensionInitializeParams: Hashable, Codable, Sendable {
     public let extensionID: ExtensionID
     public let preferences: [String: ExtensionValue]
     public let state: [String: ExtensionValue]
+    /// A folder the extension owns for caches and files too large for
+    /// `state`. Prism keeps one per extension and build, and deletes it on
+    /// uninstall. Absent from older Prism versions.
+    public let dataDirectory: String?
 
     public init(
         protocolVersion: Int = ExtensionManifest.supportedProtocolVersion,
         prismVersion: String,
         extensionID: ExtensionID,
         preferences: [String: ExtensionValue],
-        state: [String: ExtensionValue]
+        state: [String: ExtensionValue],
+        dataDirectory: String? = nil
     ) {
         self.protocolVersion = protocolVersion
         self.prismVersion = prismVersion
         self.extensionID = extensionID
         self.preferences = preferences
         self.state = state
+        self.dataDirectory = dataDirectory
     }
 
     private enum CodingKeys: String, CodingKey {
         case protocolVersion = "protocol"
-        case prismVersion, extensionID, preferences, state
+        case prismVersion, extensionID, preferences, state, dataDirectory
     }
 }
 

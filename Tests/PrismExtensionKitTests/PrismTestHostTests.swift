@@ -76,6 +76,16 @@ struct PrismTestHostTests {
         #expect(try await prism.run("count") == .keepOpen(message: "2!"))
     }
 
+    @Test("a restart keeps saved state and hands over the data directory")
+    func restart() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("prism-kit-\(UUID().uuidString)")
+        let prism = try await PrismTestHost(TallyExtension(), dataDirectory: folder)
+        _ = try await prism.run("count")
+        try await prism.restart(with: TallyExtension())
+        #expect(try await prism.run("count") == .keepOpen(message: "2."))
+        #expect(await prism.dataDirectory == folder)
+    }
+
     @Test("a failing command reports its message")
     func failure() async throws {
         let prism = try await PrismTestHost(TallyExtension())

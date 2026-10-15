@@ -14,6 +14,7 @@ public actor ExtensionRuntime {
     private var extensionID: ExtensionID = ""
     private var prismVersion = ""
     private var preferences = Preferences([:])
+    private var dataDirectory: URL?
     private var requests: [Int: Task<Void, Never>] = [:]
     /// Live status sessions: session → command, with an optional refresh loop.
     private var sessions: [String: String] = [:]
@@ -91,6 +92,7 @@ public actor ExtensionRuntime {
                 prismVersion = initialize.prismVersion
                 preferences = Preferences(initialize.preferences)
                 state = initialize.state
+                dataDirectory = initialize.dataDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
                 reply(id, result: .object([:]))
             } catch {
                 reply(id, error: "Invalid initialize parameters.")
@@ -227,7 +229,7 @@ public actor ExtensionRuntime {
     private func makeContext(requestID: Int?) -> PrismContext {
         PrismContext(
             extensionID: extensionID, prismVersion: prismVersion, preferences: preferences,
-            requestID: requestID, runtime: self
+            dataDirectory: dataDirectory, requestID: requestID, runtime: self
         )
     }
 

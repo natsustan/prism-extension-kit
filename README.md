@@ -71,7 +71,7 @@ Prism does when a preference changes.
 
 | Direction | Method | Reply |
 | --- | --- | --- |
-| Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state}` | `{}` |
+| Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory}` | `{}` |
 | Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus"}` |
 | Prism → extension | `status.subscribe` `{commandID, session}` | `{}`, then `status.update` notifications |
 | Prism → extension | `status.unsubscribe` `{session}` | none |
@@ -113,6 +113,14 @@ arrangement as strings, one per item, with a leading `-` for an item that is
 off (`["codex", "-grok"]`); items it does not mention keep their `isOn` from
 `preferences.items`.
 
+An icon is `{"symbol", "tint", "image"}`: an SF Symbol on a tinted tile, or,
+with `image`, a path inside the extension's folder to an SVG, PDF, or PNG of
+at most 512 KB, drawn as a template in the surrounding color
+(`"icons/mark.svg"`). A path that leaves the folder or names another kind of
+file falls back to the symbol.
+
 Prism starts the extension on demand and ends it after a minute idle, when a
 preference changes, or when its process tree uses more than 150 MB. Keep
-state in Prism (`state.write`), not in the process.
+small values in Prism (`state.write`), not in the process. For caches,
+`initialize` names a `dataDirectory` the extension owns (`context.dataDirectory`
+in Swift): Prism keeps one per extension and deletes it on uninstall.

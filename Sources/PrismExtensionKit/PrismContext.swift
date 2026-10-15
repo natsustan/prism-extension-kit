@@ -8,6 +8,10 @@ public struct PrismContext: Sendable {
     public let prismVersion: String
     /// Every preference the manifest declares, with defaults applied by Prism.
     public let preferences: Preferences
+    /// A folder this extension owns, for caches that should outlive the
+    /// process. Prism creates it and deletes it on uninstall; `nil` under a
+    /// Prism that predates it.
+    public let dataDirectory: URL?
 
     let requestID: Int?
     let runtime: ExtensionRuntime

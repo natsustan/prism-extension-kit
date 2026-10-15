@@ -26,6 +26,8 @@ public actor PrismTestHost {
     }
 
     public let extensionID: ExtensionID
+    /// The folder handed over as the extension's data directory.
+    public let dataDirectory: URL?
     /// Preferences as the last `initialize` sent them.
     public private(set) var preferences: [String: ExtensionValue]
     /// What Prism would keep for the extension (`state.write`).
@@ -37,7 +39,7 @@ public actor PrismTestHost {
     /// `log` messages, in order.
     public private(set) var logs: [String] = []
 
-    private let extensionValue: any PrismExtension
+    private var extensionValue: any PrismExtension
     private var runtime: ExtensionRuntime
     private var lines: LineSource
     private var responses: [Int: ExtensionMessage] = [:]
@@ -49,10 +51,12 @@ public actor PrismTestHost {
         _ extensionValue: any PrismExtension,
         extensionID: ExtensionID = "octocat.test",
         preferences: [String: ExtensionValue] = [:],
-        state: [String: ExtensionValue] = [:]
+        state: [String: ExtensionValue] = [:],
+        dataDirectory: URL? = nil
     ) async throws {
         self.extensionValue = extensionValue
         self.extensionID = extensionID
+        self.dataDirectory = dataDirectory
         self.preferences = preferences
         self.state = state
         (runtime, lines) = Self.makeRuntime(extensionValue)
@@ -70,7 +74,7 @@ public actor PrismTestHost {
     }
 
     /// Prism restarts an extension when a preference changes; this does the
-    /// same, keeping saved state.
+    /// same, keeping saved state and the data directory.
     public func setPreferences(_ preferences: [String: ExtensionValue]) async throws {
         await runtime.finish()
         self.preferences = preferences
@@ -78,9 +82,20 @@ public actor PrismTestHost {
         try await initialize()
     }
 
+    /// Prism stops an idle extension and starts it again on the next
+    /// request. Pass a fresh instance to drop everything the old process held
+    /// in memory; saved state and the data directory carry over.
+    public func restart(with extensionValue: (any PrismExtension)? = nil) async throws {
+        await runtime.finish()
+        if let extensionValue { self.extensionValue = extensionValue }
+        (runtime, lines) = Self.makeRuntime(self.extensionValue)
+        try await initialize()
+    }
+
     private func initialize() async throws {
         _ = try await request(ExtensionMethod.initialize, ExtensionInitializeParams(
-            prismVersion: "test", extensionID: extensionID, preferences: preferences, state: state
+            prismVersion: "test", extensionID: extensionID, preferences: preferences, state: state,
+            dataDirectory: dataDirectory?.path
         ))
     }
 
