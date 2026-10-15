@@ -43,9 +43,9 @@ public struct ExtensionIcon: Hashable, Codable, Sendable {
     public let symbol: String
     /// Semantic tile tint resolved by the presentation layer.
     public let tint: String
-    /// A template image drawn instead of the tile, such as a brand mark. Only
-    /// bundled extensions can use it in this version: it names an image in
-    /// Prism's asset catalog. External extensions get the symbol tile.
+    /// A template image drawn instead of the tile, such as a brand mark: a path
+    /// inside the extension's folder to an SVG, PDF, or PNG of at most 512 KB.
+    /// Anything Prism cannot use falls back to the symbol tile.
     public let image: String?
 
     public init(symbol: String, tint: String, image: String? = nil) {
