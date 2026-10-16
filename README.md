@@ -125,6 +125,8 @@ Prism starts the extension on demand and ends it after a minute idle, when a
 preference changes, or when its process tree uses more than 150 MB. Keep
 small values in Prism (`state.write`), not in the process: Prism refuses a
 write that would take the extension's state past 1 MB of JSON (a `null`
-value removes a key and is always accepted). For caches,
+value removes a key and is always accepted). The Swift runtime checks the
+same limit (`ExtensionStateQuota`) before sending, so a refused
+`context.setState` leaves `context.state` unchanged and logs why. For caches,
 `initialize` names a `dataDirectory` the extension owns (`context.dataDirectory`
 in Swift): Prism keeps one per extension and deletes it on uninstall.

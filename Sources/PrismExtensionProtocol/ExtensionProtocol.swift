@@ -295,6 +295,46 @@ public struct ExtensionStateWriteParams: Hashable, Codable, Sendable {
     }
 }
 
+/// The state one extension may keep in Prism, as encoded JSON. `initialize`
+/// sends all of it in one protocol line, which must stay well below the line
+/// limit. Prism and the extension runtime both measure writes with this, so a
+/// write the runtime keeps is one Prism keeps too.
+public struct ExtensionStateQuota: Sendable {
+    public static let limit = 1024 * 1024
+
+    /// Encoded bytes per key, so a write costs the size of its own value.
+    private var sizes: [String: Int] = [:]
+    public private(set) var total = 0
+
+    public init(_ values: [String: ExtensionValue] = [:]) {
+        for (key, value) in values {
+            let bytes = Self.encodedSize(key: key, value: value)
+            sizes[key] = bytes
+            total += bytes
+        }
+    }
+
+    /// Counts the write and returns `true`, or returns `false` without
+    /// counting it when it would grow the state past `limit`. Removing or
+    /// shrinking a value is always allowed.
+    public mutating func admit(_ value: ExtensionValue?, for key: String) -> Bool {
+        let previous = sizes[key] ?? 0
+        let next = value.map { Self.encodedSize(key: key, value: $0) } ?? 0
+        let newTotal = total - previous + next
+        if next > previous, newTotal > Self.limit { return false }
+        sizes[key] = value == nil ? nil : next
+        total = newTotal
+        return true
+    }
+
+    /// The key and value as they appear in the encoded object, give or take
+    /// its punctuation.
+    private static func encodedSize(key: String, value: ExtensionValue) -> Int {
+        let valueBytes = (try? JSONEncoder().encode(value).count) ?? Int.max / 2
+        return key.utf8.count + valueBytes + 4
+    }
+}
+
 public struct ExtensionTaskStartParams: Hashable, Codable, Sendable {
     public let requestID: Int
     public let taskID: String

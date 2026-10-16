@@ -11,6 +11,7 @@ public actor ExtensionRuntime {
     private let exit: @Sendable () -> Void
 
     private(set) var state: [String: ExtensionValue] = [:]
+    private var stateQuota = ExtensionStateQuota()
     private var extensionID: ExtensionID = ""
     private var prismVersion = ""
     private var preferences = Preferences([:])
@@ -127,6 +128,7 @@ public actor ExtensionRuntime {
                 prismVersion = initialize.prismVersion
                 preferences = Preferences(initialize.preferences)
                 state = initialize.state
+                stateQuota = ExtensionStateQuota(initialize.state)
                 dataDirectory = initialize.dataDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
                 reply(id, result: .object([:]))
             } catch {
@@ -318,6 +320,12 @@ public actor ExtensionRuntime {
         }
         guard requests[requestID] != nil, !canceledRequests.contains(requestID) else {
             log("Ignored a state write from request \(requestID), which already ended.")
+            return
+        }
+        // Prism would refuse it; keeping it here would show a value that is
+        // gone after a restart.
+        guard stateQuota.admit(value, for: key) else {
+            log("Ignored state \"\(key)\": an extension keeps at most \(ExtensionStateQuota.limit / 1024) KB of state.")
             return
         }
         state[key] = value

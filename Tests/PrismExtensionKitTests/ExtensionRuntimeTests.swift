@@ -46,6 +46,10 @@ struct Counter: PrismExtension {
             // Ignores cancellation and never checks it.
             await Task.detached { try? await Task.sleep(for: .seconds(30)) }.value
             return .done
+        case "hoard":
+            // Past the state quota: Prism would refuse it.
+            await context.setState(.string(String(repeating: "a", count: ExtensionStateQuota.limit)), for: "mark")
+            return .done
         case "mark":
             return .keepOpen(message: await context.state("mark")?.stringValue ?? "unset")
         default:
@@ -167,6 +171,20 @@ struct ExtensionRuntimeTests {
         await send(runtime, #"{"method":"cancel","params":{"id":2}}"#)
         await settle(runtime)
         #expect(recorder.notifications("state.write").isEmpty)
+
+        await send(runtime, #"{"id":3,"method":"command.run","params":{"commandID":"mark"}}"#)
+        await settle(runtime)
+        #expect(try recorder.response(3)?.result?.decode(ExtensionCommandResult.self) == .keepOpen(message: "unset"))
+    }
+
+    @Test("a write past the state quota is not sent and leaves the local state unchanged")
+    func stateQuota() async throws {
+        let (runtime, recorder) = await initialized()
+        await send(runtime, #"{"id":2,"method":"command.run","params":{"commandID":"hoard"}}"#)
+        await settle(runtime)
+        #expect(recorder.notifications("state.write").isEmpty)
+        let log = try #require(recorder.notifications("log").first?.params).decode(ExtensionLogParams.self)
+        #expect(log.message.hasPrefix(#"Ignored state "mark""#))
 
         await send(runtime, #"{"id":3,"method":"command.run","params":{"commandID":"mark"}}"#)
         await settle(runtime)
