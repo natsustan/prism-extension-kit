@@ -24,7 +24,8 @@ public struct PrismContext: Sendable {
     /// Saves a value in Prism (`state.write`). Prism keeps it across restarts
     /// and hands it back on the next start. Saved only from a request that is
     /// still running (a command, list, action, or widget load); writes from
-    /// status reads, or after the request ended, are ignored.
+    /// status reads, or after the request ended, are ignored, and so is a
+    /// write that would take the extension's state past 1 MB.
     public func setState(_ value: ExtensionValue?, for key: String) async {
         await runtime.setState(value, for: key, requestID: requestID)
     }

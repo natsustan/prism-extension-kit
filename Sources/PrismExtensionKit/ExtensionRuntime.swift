@@ -64,7 +64,7 @@ public actor ExtensionRuntime {
         } catch {
             FileHandle.standardError.write(Data("Reading from Prism failed: \(error)\n".utf8))
         }
-        await runtime.finish()
+        await runtime.hostClosed()
         Darwin.exit(0)
     }
 
@@ -89,6 +89,24 @@ public actor ExtensionRuntime {
         while let task = requests.values.first {
             await task.value
         }
+    }
+
+    /// Prism closed the pipe without `willTerminate`: it crashed or was
+    /// killed, so nothing remains to time requests out or end this process.
+    /// Cancels every request and refresh loop, gives them `grace` to unwind,
+    /// then exits, even if a request ignores cancellation.
+    public func hostClosed(grace: Duration = .seconds(1)) async {
+        for (id, request) in requests {
+            canceledRequests.insert(id)
+            request.cancel()
+        }
+        for refresher in refreshers.values { refresher.cancel() }
+        refreshers.removeAll()
+        let deadline = ContinuousClock.now + grace
+        while !requests.isEmpty, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        exit()
     }
 
     /// Waits for running requests, then stops every refresh loop.

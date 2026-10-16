@@ -83,7 +83,7 @@ Prism does when a preference changes.
 | Prism → extension | `preferences.items` `{preferenceID}` | `{"items": [{"id", "title", "icon", "badge", "isOn"}]}` for an `orderedList` preference |
 | Prism → extension | `cancel` `{id}`, `willTerminate` | none |
 | Extension → Prism | `status.update` `{session, status}` | none |
-| Extension → Prism | `state.write` `{requestID, key, value}` | none; only while that request is in flight |
+| Extension → Prism | `state.write` `{requestID, key, value}` | none; only while that request is in flight, within 1 MB per extension |
 | Extension → Prism | `task.start` `{requestID, taskID, arguments}` | none; only tasks the manifest declares |
 | Extension → Prism | `list.changed` `{commandID}` | none; an open list of that command reloads |
 | Extension → Prism | `log` `{message}` | none |
@@ -123,6 +123,8 @@ file falls back to the symbol.
 
 Prism starts the extension on demand and ends it after a minute idle, when a
 preference changes, or when its process tree uses more than 150 MB. Keep
-small values in Prism (`state.write`), not in the process. For caches,
+small values in Prism (`state.write`), not in the process: Prism refuses a
+write that would take the extension's state past 1 MB of JSON (a `null`
+value removes a key and is always accepted). For caches,
 `initialize` names a `dataDirectory` the extension owns (`context.dataDirectory`
 in Swift): Prism keeps one per extension and deletes it on uninstall.

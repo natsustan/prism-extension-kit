@@ -42,6 +42,10 @@ struct Counter: PrismExtension {
             try? await Task.sleep(for: .seconds(30))
             await context.setState(.string("late"), for: "mark")
             return .done
+        case "hang":
+            // Ignores cancellation and never checks it.
+            await Task.detached { try? await Task.sleep(for: .seconds(30)) }.value
+            return .done
         case "mark":
             return .keepOpen(message: await context.state("mark")?.stringValue ?? "unset")
         default:
@@ -133,6 +137,27 @@ struct ExtensionRuntimeTests {
         await send(runtime, #"{"id":5,"method":"command.run","params":{"commandID":"mark"}}"#)
         await settle(runtime)
         #expect(try recorder.response(5)?.result?.decode(ExtensionCommandResult.self) == .keepOpen(message: "unset"))
+    }
+
+    @Test("when Prism's pipe closes, requests are canceled and the runtime exits within a grace period")
+    func hostClosed() async throws {
+        let exits = Mutex(0)
+        let runtime = ExtensionRuntime(Counter(), output: { _ in }, exit: { exits.withLock { $0 += 1 } })
+        await send(runtime, #"{"id":1,"method":"initialize","params":{"protocol":1,"prismVersion":"1.0","extensionID":"octocat.counter","preferences":{},"state":{}}}"#)
+
+        // A request that honors cancellation ends at once; no need to wait out the grace.
+        await send(runtime, #"{"id":2,"method":"command.run","params":{"commandID":"slow"}}"#)
+        var start = ContinuousClock.now
+        await runtime.hostClosed(grace: .seconds(10))
+        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(exits.withLock { $0 } == 1)
+
+        // One that ignores it is abandoned when the grace ends.
+        await send(runtime, #"{"id":3,"method":"command.run","params":{"commandID":"hang"}}"#)
+        start = ContinuousClock.now
+        await runtime.hostClosed(grace: .milliseconds(200))
+        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(exits.withLock { $0 } == 2)
     }
 
     @Test("a canceled request's later state write changes nothing")
