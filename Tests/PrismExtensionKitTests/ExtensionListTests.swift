@@ -74,6 +74,12 @@ struct ExtensionListTests {
         #expect(throws: DecodingError.self) {
             try decode(ExtensionAction.self, #"{"id":"x","title":"X","kind":"copy"}"#)
         }
+        #expect(throws: DecodingError.self) {
+            try decode(ExtensionAction.self, #"{"id":"x","title":"X","kind":"grantFolder"}"#)
+        }
+        let grant = try decode(ExtensionAction.self, #"{"id":"allow","title":"Allow","kind":"grantFolder","folder":"notes"}"#)
+        #expect(grant.kind == .grantFolder(id: "notes"))
+        #expect(try ExtensionWire.roundTrip(grant) == grant)
         let plainKey = try decode(ExtensionAction.self, #"{"id":"x","title":"X","shortcut":"d"}"#)
         #expect(plainKey.shortcut == nil)
         #expect(ExtensionShortcut("Shift+CMD+C")?.description == "shift+cmd+c")

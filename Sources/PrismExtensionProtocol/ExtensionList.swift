@@ -363,9 +363,10 @@ public struct ExtensionMetadataRow: Hashable, Codable, Sendable {
 
 /// Something the user can do with an item.
 ///
-/// Wire form: `{"id", "title", "kind": "perform" | "copy" | "open", ...}`.
-/// `perform` (the default) sends `action.perform` to the extension; `copy`
-/// and `open` are carried out by Prism without a round trip.
+/// Wire form: `{"id", "title", "kind": "perform" | "copy" | "open" |
+/// "grantFolder", ...}`. `perform` (the default) sends `action.perform` to the
+/// extension; `copy`, `open`, and `grantFolder` are carried out by Prism
+/// without a round trip.
 public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
     public enum Kind: Hashable, Sendable {
         case perform
@@ -373,6 +374,9 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         case copy(text: String)
         /// Opens an `http`, `https`, or `file` URL with its default app.
         case open(url: URL)
+        /// Asks the user to choose one of the manifest's `folders` in an open
+        /// panel (`"folder": "<id>"`). When they do, Prism reloads the list.
+        case grantFolder(id: String)
     }
 
     public enum Style: String, Hashable, Codable, Sendable {
@@ -411,11 +415,11 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, symbol, kind, text, url, style, shortcut, confirmationMessage
+        case id, title, symbol, kind, text, url, folder, style, shortcut, confirmationMessage
     }
 
     private enum KindName: String, Codable {
-        case perform, copy, open
+        case perform, copy, open, grantFolder
     }
 
     public init(from decoder: any Decoder) throws {
@@ -437,6 +441,8 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
                 )
             }
             kind = .open(url: url)
+        case .grantFolder:
+            kind = .grantFolder(id: try container.decode(String.self, forKey: .folder))
         }
         style = try container.decodeIfPresent(Style.self, forKey: .style) ?? .regular
         // An unusable shortcut is dropped rather than failing the whole list.
@@ -459,6 +465,9 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         case let .open(url):
             try container.encode(KindName.open, forKey: .kind)
             try container.encode(url.absoluteString, forKey: .url)
+        case let .grantFolder(id):
+            try container.encode(KindName.grantFolder, forKey: .kind)
+            try container.encode(id, forKey: .folder)
         }
         try container.encode(style, forKey: .style)
         try container.encodeIfPresent(shortcut?.description, forKey: .shortcut)

@@ -275,6 +275,46 @@ public struct ExtensionTask: Hashable, Codable, Sendable, Identifiable {
     }
 }
 
+/// A folder outside the extension's data directory that it reads, such as
+/// another app's library under `~/Library/Group Containers`. macOS protects
+/// some of these; the extension offers a `grantFolder` action, and Prism asks
+/// the user to choose the folder in an open panel. The user's choice lets
+/// Prism, and the extensions it runs, read it from then on.
+public struct ExtensionFolderGrant: Hashable, Codable, Sendable, Identifiable {
+    public let id: String
+    /// Absolute, or relative to the home folder with a leading `~/`.
+    public let path: String
+    /// Why the extension needs it, shown in the open panel.
+    public let reason: String
+
+    public init(id: String, path: String, reason: String) {
+        self.id = id
+        self.path = path
+        self.reason = reason
+    }
+
+    /// `path` with `~` expanded against `home`.
+    public func url(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        guard path.hasPrefix("~/") else { return URL(fileURLWithPath: path, isDirectory: true) }
+        return home.appendingPathComponent(String(path.dropFirst(2)), isDirectory: true)
+    }
+
+    /// An absolute or `~/` path that names a folder below the root, without
+    /// `.` or `..` steps.
+    public var hasValidPath: Bool {
+        let relative: Substring
+        if path.hasPrefix("~/") {
+            relative = path.dropFirst(2)
+        } else if path.hasPrefix("/") {
+            relative = path.dropFirst()
+        } else {
+            return false
+        }
+        let steps = relative.split(separator: "/", omittingEmptySubsequences: false)
+        return !relative.isEmpty && steps.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
+    }
+}
+
 /// Declared at install time. Informational in v1; shaped so it can be enforced.
 public struct ExtensionCapability: RawRepresentable, Hashable, Codable, Sendable,
     ExpressibleByStringLiteral {
@@ -325,6 +365,8 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
     public let preferences: [ExtensionPreference]
     public let widgets: [ExtensionWidget]
     public let tasks: [ExtensionTask]
+    /// Folders the extension may ask the user to let it read.
+    public let folders: [ExtensionFolderGrant]
     public let capabilities: [ExtensionCapability]
 
     public init(
@@ -341,6 +383,7 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
         preferences: [ExtensionPreference] = [],
         widgets: [ExtensionWidget] = [],
         tasks: [ExtensionTask] = [],
+        folders: [ExtensionFolderGrant] = [],
         capabilities: [ExtensionCapability] = []
     ) {
         self.protocolVersion = protocolVersion
@@ -356,6 +399,7 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
         self.preferences = preferences
         self.widgets = widgets
         self.tasks = tasks
+        self.folders = folders
         self.capabilities = capabilities
     }
 
@@ -363,7 +407,7 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
         case protocolVersion = "protocol"
         case id, name, version, author
         case summary = "description"
-        case minPrism, icon, executable, commands, preferences, widgets, tasks, capabilities
+        case minPrism, icon, executable, commands, preferences, widgets, tasks, folders, capabilities
     }
 
     public init(from decoder: any Decoder) throws {
@@ -382,6 +426,7 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
         preferences = try container.decodeIfPresent([ExtensionPreference].self, forKey: .preferences) ?? []
         widgets = try container.decodeIfPresent([ExtensionWidget].self, forKey: .widgets) ?? []
         tasks = try container.decodeIfPresent([ExtensionTask].self, forKey: .tasks) ?? []
+        folders = try container.decodeIfPresent([ExtensionFolderGrant].self, forKey: .folders) ?? []
         capabilities = try container.decodeIfPresent([ExtensionCapability].self, forKey: .capabilities) ?? []
     }
 
@@ -415,6 +460,10 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
     public func task(id: String) -> ExtensionTask? {
         tasks.first { $0.id == id }
     }
+
+    public func folder(id: String) -> ExtensionFolderGrant? {
+        folders.first { $0.id == id }
+    }
 }
 
 public enum ExtensionManifestError: Error, Equatable, Sendable {
@@ -425,6 +474,7 @@ public enum ExtensionManifestError: Error, Equatable, Sendable {
     case duplicateID(kind: String, id: String)
     case invalidItemID(kind: String, id: String)
     case invalidTaskExecutable(String)
+    case invalidFolderPath(String)
     case invalidPreferenceDefault(id: String, type: ExtensionPreferenceType)
 }
 
@@ -450,11 +500,18 @@ public extension ExtensionManifest {
         try Self.validateItemIDs(preferences.map(\.id), kind: "preference")
         try Self.validateItemIDs(widgets.map(\.id), kind: "widget")
         try Self.validateItemIDs(tasks.map(\.id), kind: "task")
+        try Self.validateItemIDs(folders.map(\.id), kind: "folder")
         for command in commands where command.title.trimmingCharacters(in: .whitespaces).isEmpty {
             throw ExtensionManifestError.emptyField("commands.\(command.id).title")
         }
         for task in tasks where !task.executable.hasPrefix("/") {
             throw ExtensionManifestError.invalidTaskExecutable(task.executable)
+        }
+        for folder in folders {
+            guard folder.hasValidPath else { throw ExtensionManifestError.invalidFolderPath(folder.path) }
+            if folder.reason.trimmingCharacters(in: .whitespaces).isEmpty {
+                throw ExtensionManifestError.emptyField("folders.\(folder.id).reason")
+            }
         }
         for preference in preferences {
             guard let value = preference.defaultValue else { continue }

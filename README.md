@@ -91,10 +91,10 @@ Prism does when a preference changes.
 A list item is `{"id", "title", "subtitle", "icon", "accessories", "keywords",
 "section", "detail", "actions"}`; only `id` and `title` are required, and IDs
 must stay the same across reloads. An action is `{"id", "title", "symbol",
-"kind": "perform" | "copy" | "open", "text" | "url", "style": "destructive",
-"shortcut": "cmd+shift+c", "confirmationMessage"}`; destructive actions, and
-any action with a `confirmationMessage`, ask before they run. The first action
-runs on Return. `query` is empty unless the list sets `"filtering": "extension"`;
+"kind": "perform" | "copy" | "open" | "grantFolder", "text" | "url" | "folder",
+"style": "destructive", "shortcut": "cmd+shift+c", "confirmationMessage"}`;
+destructive actions, and any action with a `confirmationMessage`, ask before
+they run. The first action runs on Return. `query` is empty unless the list sets `"filtering": "extension"`;
 `filter` is `null` until the user picks one of `filters` with ⌘P.
 
 Gauges use a meter, `{"fraction": 0...1, "tone": "normal" | "warning" |
@@ -106,6 +106,14 @@ templates (`quotaRings`, `quotaNumbers`, `quotaBars`, `quotaRing`,
 (`label`, `value`, `style: "badge"`, `meter`, `date`), and the pinned
 `metadata` block. Dates are Unix seconds. An item with `"isLoading": true`
 shows a spinner.
+
+Some folders are protected by macOS, such as another app's library under
+`~/Library/Group Containers`. Declare each one the extension reads in the
+manifest, `"folders": [{"id", "path": "~/…" | "/…", "reason"}]`, and when a
+read fails with a permission error, offer an item whose action is
+`{"kind": "grantFolder", "folder": "<id>"}`. Prism opens a panel at that
+folder with the `reason`; once the user chooses it, Prism and the extensions
+it runs can read it, and the list reloads. No Full Disk Access is needed.
 
 A preference may name a `section`; settings shows each section as its own
 group, in the order sections first appear, and puts the rest under
