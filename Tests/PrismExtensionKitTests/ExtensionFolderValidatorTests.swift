@@ -27,10 +27,13 @@ struct ExtensionFolderValidatorTests {
         func remove() { try? FileManager.default.removeItem(at: url) }
     }
 
-    private static func manifest(id: String = "octocat.sample", executable: String = "bin/run") -> String {
+    private static func manifest(
+        id: String = "octocat.sample", executable: String = "bin/run", preferences: String = "[]"
+    ) -> String {
         """
         { "protocol": 1, "id": "\(id)", "name": "Sample", "version": "1.0.0", "author": "octocat",
-          "executable": "\(executable)", "commands": [{ "id": "run", "title": "Run", "mode": "no-view" }] }
+          "executable": "\(executable)", "commands": [{ "id": "run", "title": "Run", "mode": "no-view" }],
+          "preferences": \(preferences) }
         """
     }
 
@@ -63,6 +66,9 @@ struct ExtensionFolderValidatorTests {
             (try Folder(manifest: Self.manifest(executable: "../run")), "inside the extension folder"),
             (try Folder(manifest: Self.manifest(executable: "bin/missing")), "was not found"),
             (try Folder(manifest: Self.manifest(), executable: false), "chmod +x"),
+            // Pickers have no way to declare their options yet.
+            (try Folder(manifest: Self.manifest(preferences: #"[{ "id": "mode", "type": "picker", "title": "Mode" }]"#)),
+             "unsupported value at “preferences[0].type”"),
         ]
         defer { cases.forEach { $0.0.remove() } }
         for (folder, expected) in cases {

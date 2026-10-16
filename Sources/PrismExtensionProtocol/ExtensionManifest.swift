@@ -164,7 +164,6 @@ public enum ExtensionPreferenceType: String, Hashable, Codable, Sendable {
     case bool
     case text
     case secret
-    case picker
     case orderedList
 }
 

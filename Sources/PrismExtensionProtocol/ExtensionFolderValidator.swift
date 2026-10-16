@@ -37,8 +37,12 @@ public enum ExtensionFolderValidator {
             manifest = try JSONDecoder().decode(ExtensionManifest.self, from: Data(contentsOf: url))
         } catch let DecodingError.keyNotFound(key, _) {
             throw Failure(message: "manifest.json is missing “\(key.stringValue)”.")
-        } catch let DecodingError.dataCorrupted(context) {
+        } catch let DecodingError.dataCorrupted(context) where context.codingPath.isEmpty {
             throw Failure(message: "manifest.json is not valid JSON: \(context.debugDescription)")
+        } catch let DecodingError.dataCorrupted(context) {
+            // Valid JSON with a value Prism does not support, such as an unknown
+            // preference type.
+            throw Failure(message: "manifest.json has an unsupported value at “\(path(context.codingPath))”.")
         } catch {
             throw Failure(message: "manifest.json could not be read: \(error.localizedDescription)")
         }
@@ -84,6 +88,17 @@ public enum ExtensionFolderValidator {
         var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
         guard realpath(url.path, &buffer) != nil else { return url.standardizedFileURL.path }
         return String(decoding: buffer.prefix(while: { $0 != 0 }).map(UInt8.init(bitPattern:)), as: UTF8.self)
+    }
+
+    /// `preferences[0].type` for a decoding path.
+    private static func path(_ codingPath: [any CodingKey]) -> String {
+        codingPath.reduce(into: "") { path, key in
+            if let index = key.intValue {
+                path += "[\(index)]"
+            } else {
+                path += path.isEmpty ? key.stringValue : ".\(key.stringValue)"
+            }
+        }
     }
 
     public static func describe(_ error: ExtensionManifestError) -> String {
