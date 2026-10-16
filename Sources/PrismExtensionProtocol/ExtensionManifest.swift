@@ -165,6 +165,15 @@ public enum ExtensionPreferenceType: String, Hashable, Codable, Sendable {
     case text
     case secret
     case orderedList
+
+    /// What a default of this type must be, for validation messages.
+    public var defaultDescription: String {
+        switch self {
+        case .bool: "true or false"
+        case .text, .secret: "string"
+        case .orderedList: "list of strings"
+        }
+    }
 }
 
 /// A user preference rendered by Prism from its declaration.
@@ -416,6 +425,7 @@ public enum ExtensionManifestError: Error, Equatable, Sendable {
     case duplicateID(kind: String, id: String)
     case invalidItemID(kind: String, id: String)
     case invalidTaskExecutable(String)
+    case invalidPreferenceDefault(id: String, type: ExtensionPreferenceType)
 }
 
 public extension ExtensionManifest {
@@ -445,6 +455,16 @@ public extension ExtensionManifest {
         }
         for task in tasks where !task.executable.hasPrefix("/") {
             throw ExtensionManifestError.invalidTaskExecutable(task.executable)
+        }
+        for preference in preferences {
+            guard let value = preference.defaultValue else { continue }
+            let matches = switch (preference.type, value) {
+            case (.bool, .bool), (.text, .string), (.secret, .string), (.orderedList, .strings): true
+            default: false
+            }
+            guard matches else {
+                throw ExtensionManifestError.invalidPreferenceDefault(id: preference.id, type: preference.type)
+            }
         }
     }
 

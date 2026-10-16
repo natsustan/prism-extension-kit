@@ -117,6 +117,8 @@ public enum ExtensionFolderValidator {
             "“\(id)” is not a valid \(kind) ID. Use letters, digits, - and _."
         case let .invalidTaskExecutable(path):
             "Task executable \(path) must be an absolute path."
+        case let .invalidPreferenceDefault(id, type):
+            "The default of preference “\(id)” is not a \(type.defaultDescription)."
         }
     }
 }
