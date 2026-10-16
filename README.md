@@ -123,11 +123,13 @@ arrangement as strings, one per item, with a leading `-` for an item that is
 off (`["codex", "-grok"]`); items it does not mention keep their `isOn` from
 `preferences.items`.
 
-An icon is `{"symbol", "tint", "image"}`: an SF Symbol on a tinted tile, or,
-with `image`, a path inside the extension's folder to an SVG, PDF, or PNG of
-at most 512 KB, drawn as a template in the surrounding color
-(`"icons/mark.svg"`). A path that leaves the folder or names another kind of
-file falls back to the symbol.
+An icon is `{"symbol", "tint", "image", "app"}`: an SF Symbol on a tinted
+tile; with `image`, a path inside the extension's folder to an SVG, PDF, or
+PNG of at most 512 KB, drawn as a template in the surrounding color
+(`"icons/mark.svg"`); or, with `app`, an installed app's bundle identifier
+(`"com.apple.Notes"`), drawn as that app's own icon. `app` comes before
+`image`. A path that leaves the folder or names another kind of file, or an
+app that is not installed, falls back to the symbol.
 
 Prism starts the extension on demand and ends it after a minute idle, when a
 preference changes, or when its process tree uses more than 150 MB. Keep

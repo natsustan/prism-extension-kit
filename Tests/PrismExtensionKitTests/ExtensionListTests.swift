@@ -64,6 +64,11 @@ struct ExtensionListTests {
         #expect(full.items[0].primaryAction?.kind == .open(url: URL(string: "https://example.com/a")!))
         #expect(full.items[0].action(id: "rm")?.shortcut?.description == "cmd+delete")
         #expect(try ExtensionWire.roundTrip(full) == full)
+
+        let appIcon = try decode(ExtensionIcon.self, #"{"symbol":"note.text","tint":"gold","app":"com.apple.Notes"}"#)
+        #expect(appIcon == ExtensionIcon(symbol: "note.text", tint: "gold", app: "com.apple.Notes"))
+        #expect(try decode(ExtensionIcon.self, #"{"symbol":"star","tint":"blue"}"#).app == nil)
+        #expect(try ExtensionWire.roundTrip(appIcon) == appIcon)
     }
 
     @Test("actions reject unsafe URLs and drop unusable shortcuts")

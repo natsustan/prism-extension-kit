@@ -38,7 +38,8 @@ public struct ExtensionID: RawRepresentable, Hashable, Comparable, Codable, Send
     }
 }
 
-/// A tiled SF Symbol, matching the launcher's command icons.
+/// A tiled SF Symbol, matching the launcher's command icons, or an installed
+/// app's icon.
 public struct ExtensionIcon: Hashable, Codable, Sendable {
     public let symbol: String
     /// Semantic tile tint resolved by the presentation layer.
@@ -47,11 +48,16 @@ public struct ExtensionIcon: Hashable, Codable, Sendable {
     /// inside the extension's folder to an SVG, PDF, or PNG of at most 512 KB.
     /// Anything Prism cannot use falls back to the symbol tile.
     public let image: String?
+    /// An app's bundle identifier (`com.apple.Notes`): Prism draws that app's
+    /// own icon, in color, for an extension that works with the app. Ahead of
+    /// `image`; the symbol tile stands in when the app is not installed.
+    public let app: String?
 
-    public init(symbol: String, tint: String, image: String? = nil) {
+    public init(symbol: String, tint: String, image: String? = nil, app: String? = nil) {
         self.symbol = symbol
         self.tint = tint
         self.image = image
+        self.app = app
     }
 }
 
