@@ -115,6 +115,13 @@ read fails with a permission error, offer an item whose action is
 folder with the `reason`; once the user chooses it, Prism and the extensions
 it runs can read it, and the list reloads. No Full Disk Access is needed.
 
+A `list` command that searches an app can say which one with
+`"searchesApp": "<bundle id>"` (`"com.apple.Notes"`). When that app's row is
+selected in root search, it offers the command, and Tab opens the list with
+the app named beside the search field, as Spotlight searches inside an app;
+Backspace in the empty field returns to the app's row. The command keeps its
+own row too.
+
 A preference may name a `section`; settings shows each section as its own
 group, in the order sections first appear, and puts the rest under
 "Options". Preferences of type `secret` are kept in the Keychain and arrive in

@@ -82,6 +82,10 @@ public struct ExtensionCommand: Hashable, Codable, Sendable, Identifiable {
     public let icon: ExtensionIcon?
     /// The row can subscribe to live status while visible.
     public let liveStatus: Bool
+    /// The bundle ID of the app this `list` command searches. That app's
+    /// root-search row then opens the command with Tab, as Spotlight searches
+    /// inside an app.
+    public let searchesApp: String?
 
     public init(
         id: String,
@@ -91,7 +95,8 @@ public struct ExtensionCommand: Hashable, Codable, Sendable, Identifiable {
         keywords: [String] = [],
         aliases: [String] = [],
         icon: ExtensionIcon? = nil,
-        liveStatus: Bool = false
+        liveStatus: Bool = false,
+        searchesApp: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -101,10 +106,11 @@ public struct ExtensionCommand: Hashable, Codable, Sendable, Identifiable {
         self.aliases = aliases
         self.icon = icon
         self.liveStatus = liveStatus
+        self.searchesApp = searchesApp
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, subtitle, mode, keywords, aliases, icon, liveStatus
+        case id, title, subtitle, mode, keywords, aliases, icon, liveStatus, searchesApp
     }
 
     public init(from decoder: any Decoder) throws {
@@ -117,6 +123,7 @@ public struct ExtensionCommand: Hashable, Codable, Sendable, Identifiable {
         aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
         icon = try container.decodeIfPresent(ExtensionIcon.self, forKey: .icon)
         liveStatus = try container.decodeIfPresent(Bool.self, forKey: .liveStatus) ?? false
+        searchesApp = try container.decodeIfPresent(String.self, forKey: .searchesApp)
     }
 }
 
@@ -481,6 +488,8 @@ public enum ExtensionManifestError: Error, Equatable, Sendable {
     case invalidItemID(kind: String, id: String)
     case invalidTaskExecutable(String)
     case invalidFolderPath(String)
+    /// `searchesApp` on a command that is not a `list`, or an empty one.
+    case invalidAppSearch(command: String)
     case invalidPreferenceDefault(id: String, type: ExtensionPreferenceType)
 }
 
@@ -509,6 +518,12 @@ public extension ExtensionManifest {
         try Self.validateItemIDs(folders.map(\.id), kind: "folder")
         for command in commands where command.title.trimmingCharacters(in: .whitespaces).isEmpty {
             throw ExtensionManifestError.emptyField("commands.\(command.id).title")
+        }
+        for command in commands {
+            guard let app = command.searchesApp else { continue }
+            guard command.mode == .list, !app.trimmingCharacters(in: .whitespaces).isEmpty else {
+                throw ExtensionManifestError.invalidAppSearch(command: command.id)
+            }
         }
         for task in tasks where !task.executable.hasPrefix("/") {
             throw ExtensionManifestError.invalidTaskExecutable(task.executable)
