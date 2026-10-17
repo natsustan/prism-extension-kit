@@ -113,14 +113,16 @@ manifest, `"folders": [{"id", "path": "~/…" | "/…", "reason"}]`, and when a
 read fails with a permission error, offer an item whose action is
 `{"kind": "grantFolder", "folder": "<id>"}`. Prism opens a panel at that
 folder with the `reason`; once the user chooses it, Prism and the extensions
-it runs can read it, and the list reloads. No Full Disk Access is needed.
+it runs can read it, the extension restarts, and the list reloads. No Full
+Disk Access is needed. A grant whose folder later moves or goes away lapses,
+so offer the action again whenever the read fails.
 
 A `list` command that searches an app can say which one with
-`"searchesApp": "<bundle id>"` (`"com.apple.Notes"`). When that app's row is
-selected in root search, it offers the command, and Tab opens the list with
-the app named beside the search field, as Spotlight searches inside an app;
-Backspace in the empty field returns to the app's row. The command keeps its
-own row too.
+`"searchesApp": "<bundle id>"` (`"com.apple.Notes"`, matched ignoring case).
+When that app's row is selected in root search, it offers the command, and
+Tab opens the list with the app named beside the search field, as Spotlight
+searches inside an app; Backspace in the empty field returns to the app's
+row. The command keeps its own row too.
 
 A preference may name a `section`; settings shows each section as its own
 group, in the order sections first appear, and puts the rest under

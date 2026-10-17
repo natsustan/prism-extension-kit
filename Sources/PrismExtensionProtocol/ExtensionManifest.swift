@@ -324,7 +324,7 @@ public struct ExtensionFolderGrant: Hashable, Codable, Sendable, Identifiable {
             return false
         }
         let steps = relative.split(separator: "/", omittingEmptySubsequences: false)
-        return !relative.isEmpty && steps.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
+        return steps.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
     }
 }
 
