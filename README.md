@@ -114,8 +114,9 @@ read fails with a permission error, offer an item whose action is
 `{"kind": "grantFolder", "folder": "<id>"}`. Prism opens a panel at that
 folder with the `reason`; once the user chooses it, Prism and the extensions
 it runs can read it, the extension restarts, and the list reloads. No Full
-Disk Access is needed. A grant whose folder later moves or goes away lapses,
-so offer the action again whenever the read fails.
+Disk Access is needed. A grant lapses when its folder moves or goes away,
+or when a new version stops declaring it at the same path, so offer the
+action again whenever the read fails.
 
 A `list` command that searches an app can say which one with
 `"searchesApp": "<bundle id>"` (`"com.apple.Notes"`, matched ignoring case).
