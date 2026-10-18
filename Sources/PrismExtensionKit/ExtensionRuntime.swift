@@ -23,6 +23,11 @@ public actor ExtensionRuntime {
     /// Live status sessions: session → command, with an optional refresh loop.
     private var sessions: [String: String] = [:]
     private var refreshers: [String: Task<Void, Never>] = [:]
+    /// The newest status read started for each session. A read that is no
+    /// longer the newest when it returns is dropped, so an older result,
+    /// such as one computed with replaced preferences, never lands last.
+    private var statusReads: [String: Int] = [:]
+    private var statusReadCount = 0
     /// The pass after the latest `preferences.update`; a newer one replaces it.
     private var preferenceRefresh: Task<Void, Never>?
 
@@ -239,6 +244,7 @@ public actor ExtensionRuntime {
         case ExtensionMethod.statusUnsubscribe:
             guard let unsubscribe = try? params.decode(ExtensionStatusUnsubscribeParams.self) else { return }
             sessions[unsubscribe.session] = nil
+            statusReads[unsubscribe.session] = nil
             refreshers.removeValue(forKey: unsubscribe.session)?.cancel()
         case ExtensionMethod.cancel:
             guard let cancel = try? params.decode(ExtensionCancelParams.self) else { return }
@@ -304,6 +310,9 @@ public actor ExtensionRuntime {
 
     private func refreshStatus(_ session: String) async {
         guard let command = sessions[session] else { return }
+        statusReadCount += 1
+        let read = statusReadCount
+        statusReads[session] = read
         let status: ExtensionRowStatus?
         do {
             status = try await extensionValue.status(for: command, context: makeContext(requestID: nil))
@@ -313,8 +322,9 @@ public actor ExtensionRuntime {
                 isLive: true, help: Self.message(for: error)
             )
         }
-        // The row may have left the screen while the status was computed.
-        guard sessions[session] != nil else { return }
+        // The row may have left the screen, or a newer read started, while
+        // the status was computed.
+        guard sessions[session] != nil, statusReads[session] == read else { return }
         notify(ExtensionMethod.statusUpdate, ExtensionStatusUpdateParams(session: session, status: status))
     }
 

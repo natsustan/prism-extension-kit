@@ -71,6 +71,36 @@ struct Counter: PrismExtension {
     }
 }
 
+/// Holds status reads until the test releases them, ignoring cancellation
+/// the way an extension that never checks it would.
+final class StatusGate: Sendable {
+    private let held = Mutex<[CheckedContinuation<Void, Never>]>([])
+
+    var waiting: Int { held.withLock { $0.count } }
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            held.withLock { $0.append(continuation) }
+        }
+    }
+
+    func release() {
+        for continuation in held.withLock({ held in defer { held.removeAll() }; return held }) {
+            continuation.resume()
+        }
+    }
+}
+
+let statusGate = StatusGate()
+
+/// Shows its `label` preference as the status, held at the gate while `hold` is on.
+struct Labeler: PrismExtension {
+    func status(for command: String, context: PrismContext) async throws -> ExtensionRowStatus? {
+        if context.preferences.bool("hold") { await statusGate.wait() }
+        return ExtensionRowStatus(text: context.preferences.string("label"), isLive: true)
+    }
+}
+
 @Suite("Extension runtime")
 struct ExtensionRuntimeTests {
     private func send(_ runtime: ExtensionRuntime, _ json: String) async {
@@ -150,6 +180,39 @@ struct ExtensionRuntimeTests {
         await send(runtime, #"{"id":5,"method":"command.run","params":{"commandID":"mark"}}"#)
         await settle(runtime)
         #expect(try recorder.response(5)?.result?.decode(ExtensionCommandResult.self) == .keepOpen(message: "unset"))
+    }
+
+    @Test("a status read that returns after a newer one is not published")
+    func staleStatus() async throws {
+        let recorder = OutputRecorder()
+        let runtime = ExtensionRuntime(Labeler(), output: { recorder.record($0) }, exit: {})
+        await send(runtime, #"{"id":1,"method":"initialize","params":{"protocol":1,"prismVersion":"1.0","extensionID":"octocat.labeler","preferences":{"label":"old","hold":true},"state":{}}}"#)
+        func statuses() throws -> [String?] {
+            try recorder.notifications("status.update").map {
+                try #require($0.params).decode(ExtensionStatusUpdateParams.self).status?.text
+            }
+        }
+        func eventually(_ condition: () throws -> Bool) async rethrows {
+            let deadline = ContinuousClock.now + .seconds(5)
+            while try !condition(), ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+        }
+
+        // The first read holds the old preferences.
+        await send(runtime, #"{"id":2,"method":"status.subscribe","params":{"commandID":"status","session":"s1"}}"#)
+        await eventually { statusGate.waiting == 1 }
+        #expect(statusGate.waiting == 1)
+
+        // A newer read with the new preferences finishes first.
+        await send(runtime, #"{"method":"preferences.update","params":{"preferences":{"label":"new"}}}"#)
+        try await eventually { try statuses() == ["new"] }
+        #expect(try statuses() == ["new"])
+
+        // The old read returns last and is dropped.
+        statusGate.release()
+        await settle(runtime)
+        #expect(try statuses() == ["new"])
     }
 
     @Test("when Prism's pipe closes, requests are canceled and the runtime exits within a grace period")
