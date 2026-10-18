@@ -91,7 +91,7 @@ struct ExtensionRuntimeTests {
     @Test("commands run with preferences and state, and write state for the request")
     func commands() async throws {
         let (runtime, recorder) = await initialized(state: #"{"count":2}"#)
-        #expect(recorder.response(1)?.result == .object([:]))
+        #expect(try recorder.response(1)?.result?.decode(ExtensionInitializeResult.self).updatesPreferences == true)
 
         await send(runtime, #"{"id":2,"method":"command.run","params":{"commandID":"increment"}}"#)
         await settle(runtime)
@@ -111,6 +111,15 @@ struct ExtensionRuntimeTests {
         await send(runtime, #"{"id":2,"method":"command.run","params":{"commandID":"increment"}}"#)
         await settle(runtime)
         #expect(try recorder.response(2)?.result?.decode(ExtensionCommandResult.self) == .done)
+    }
+
+    @Test("preferences.update reaches the next request without a restart")
+    func preferencesUpdate() async throws {
+        let (runtime, recorder) = await initialized(#"{"quiet":true}"#)
+        await send(runtime, #"{"method":"preferences.update","params":{"preferences":{"quiet":false}}}"#)
+        await send(runtime, #"{"id":2,"method":"command.run","params":{"commandID":"increment"}}"#)
+        await settle(runtime)
+        #expect(try recorder.response(2)?.result?.decode(ExtensionCommandResult.self) == .keepOpen(message: "Count: 1"))
     }
 
     @Test("live status pushes on subscribe and after commands, and stops on unsubscribe")

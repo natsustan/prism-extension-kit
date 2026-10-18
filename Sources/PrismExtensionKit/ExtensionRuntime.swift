@@ -23,6 +23,8 @@ public actor ExtensionRuntime {
     /// Live status sessions: session → command, with an optional refresh loop.
     private var sessions: [String: String] = [:]
     private var refreshers: [String: Task<Void, Never>] = [:]
+    /// The pass after the latest `preferences.update`; a newer one replaces it.
+    private var preferenceRefresh: Task<Void, Never>?
 
     /// `output` receives complete lines, newline included. `exit` ends the
     /// program when Prism asks it to stop.
@@ -130,7 +132,7 @@ public actor ExtensionRuntime {
                 state = initialize.state
                 stateQuota = ExtensionStateQuota(initialize.state)
                 dataDirectory = initialize.dataDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
-                reply(id, result: .object([:]))
+                reply(id, encoding: ExtensionInitializeResult(updatesPreferences: true))
             } catch {
                 reply(id, error: "Invalid initialize parameters.")
             }
@@ -243,6 +245,14 @@ public actor ExtensionRuntime {
             guard let request = requests[cancel.id] else { return }
             canceledRequests.insert(cancel.id)
             request.cancel()
+        case ExtensionMethod.preferencesUpdate:
+            guard let update = try? params.decode(ExtensionPreferencesUpdateParams.self) else { return }
+            // Requests after this line see the new values; ones already
+            // running keep the context they started with.
+            preferences = Preferences(update.preferences)
+            // What a live row shows may depend on a preference.
+            preferenceRefresh?.cancel()
+            preferenceRefresh = Task { await refreshAllStatuses() }
         case ExtensionMethod.willTerminate:
             exit()
         default:
@@ -287,7 +297,7 @@ public actor ExtensionRuntime {
     }
 
     private func refreshAllStatuses() async {
-        for session in sessions.keys {
+        for session in sessions.keys where !Task.isCancelled {
             await refreshStatus(session)
         }
     }

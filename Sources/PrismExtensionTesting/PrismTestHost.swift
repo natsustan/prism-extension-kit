@@ -28,7 +28,7 @@ public actor PrismTestHost {
     public let extensionID: ExtensionID
     /// The folder handed over as the extension's data directory.
     public let dataDirectory: URL?
-    /// Preferences as the last `initialize` sent them.
+    /// Preferences as `initialize` or the last `preferences.update` sent them.
     public private(set) var preferences: [String: ExtensionValue]
     /// What Prism would keep for the extension (`state.write`).
     public private(set) var state: [String: ExtensionValue]
@@ -73,13 +73,11 @@ public actor PrismTestHost {
         return (runtime, LineSource(stream))
     }
 
-    /// Prism restarts an extension when a preference changes; this does the
-    /// same, keeping saved state and the data directory.
+    /// Prism hands a running extension new preferences in place
+    /// (`preferences.update`); the next call sees them.
     public func setPreferences(_ preferences: [String: ExtensionValue]) async throws {
-        await runtime.finish()
         self.preferences = preferences
-        (runtime, lines) = Self.makeRuntime(extensionValue)
-        try await initialize()
+        try await notify(ExtensionMethod.preferencesUpdate, ExtensionPreferencesUpdateParams(preferences: preferences))
     }
 
     /// Prism stops an idle extension and starts it again on the next
@@ -151,9 +149,7 @@ public actor PrismTestHost {
         while statuses[session] == nil {
             try await readLine()
         }
-        await runtime.receive(try ExtensionMessage.notification(
-            method: ExtensionMethod.statusUnsubscribe, params: ExtensionStatusUnsubscribeParams(session: session)
-        ).line())
+        try await notify(ExtensionMethod.statusUnsubscribe, ExtensionStatusUnsubscribeParams(session: session))
         return statuses.removeValue(forKey: session) ?? nil
     }
 
@@ -171,6 +167,10 @@ public actor PrismTestHost {
             throw Failure(description: error.message)
         }
         return response.result ?? .null
+    }
+
+    private func notify<Params: Encodable>(_ method: String, _ params: Params) async throws {
+        await runtime.receive(try ExtensionMessage.notification(method: method, params: params).line())
     }
 
     private func readLine() async throws {

@@ -123,6 +123,7 @@ public enum ExtensionMethod {
     public static let actionPerform = "action.perform"
     public static let widgetLoad = "widget.load"
     public static let preferencesItems = "preferences.items"
+    public static let preferencesUpdate = "preferences.update"
     public static let statusSubscribe = "status.subscribe"
     public static let statusUnsubscribe = "status.unsubscribe"
     public static let cancel = "cancel"
@@ -165,6 +166,27 @@ public struct ExtensionInitializeParams: Hashable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case protocolVersion = "protocol"
         case prismVersion, extensionID, preferences, state, dataDirectory
+    }
+}
+
+/// The `initialize` reply. An extension that leaves `updatesPreferences`
+/// out (older runtimes reply `{}`) is restarted when a preference changes.
+public struct ExtensionInitializeResult: Hashable, Codable, Sendable {
+    /// The extension takes `preferences.update` while it runs.
+    public let updatesPreferences: Bool?
+
+    public init(updatesPreferences: Bool? = nil) {
+        self.updatesPreferences = updatesPreferences
+    }
+}
+
+/// `preferences.update`: every declared preference after the user changed
+/// one, in the same shape `initialize` carries them.
+public struct ExtensionPreferencesUpdateParams: Hashable, Codable, Sendable {
+    public let preferences: [String: ExtensionValue]
+
+    public init(preferences: [String: ExtensionValue]) {
+        self.preferences = preferences
     }
 }
 

@@ -65,14 +65,15 @@ import Testing
 
 `PrismTestHost` sends the same messages Prism does through the same runtime,
 and records what the extension asked of Prism: `state`, `startedTasks`,
-`changedLists`, and `logs`. `setPreferences` restarts the extension the way
-Prism does when a preference changes.
+`changedLists`, and `logs`. `setPreferences` hands the running extension new
+values the way Prism does when a preference changes.
 
 ## Protocol v1
 
 | Direction | Method | Reply |
 | --- | --- | --- |
-| Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory}` | `{}` |
+| Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory}` | `{"updatesPreferences": true}`, or `{}` |
+| Prism → extension | `preferences.update` `{preferences}` | none; only to an extension that replied `updatesPreferences` |
 | Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus"}` |
 | Prism → extension | `status.subscribe` `{commandID, session}` | `{}`, then `status.update` notifications |
 | Prism → extension | `status.unsubscribe` `{session}` | none |
@@ -141,8 +142,15 @@ PNG of at most 512 KB, drawn as a template in the surrounding color
 `image`. A path that leaves the folder or names another kind of file, or an
 app that is not installed, falls back to the symbol.
 
-Prism starts the extension on demand and ends it after a minute idle, when a
-preference changes, or when its process tree uses more than 150 MB. Keep
+Prism starts the extension on demand and ends it after a minute idle or when
+its process tree uses more than 150 MB. When a preference changes, Prism sends
+the running extension `preferences.update` with every value, then reloads its
+open lists and visible widgets; the Swift runtime replies `updatesPreferences`
+and hands later requests the new values in `context.preferences`, so read
+preferences per request rather than once per process. It also sends a fresh
+`status.update` for every subscribed row; an extension in another language
+that replies `updatesPreferences` should do the same. An extension that does
+not reply it is restarted instead. Keep
 small values in Prism (`state.write`), not in the process: Prism refuses a
 write that would take the extension's state past 1 MB of JSON (a `null`
 value removes a key and is always accepted). The Swift runtime checks the

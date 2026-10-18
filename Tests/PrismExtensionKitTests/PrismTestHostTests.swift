@@ -68,7 +68,7 @@ struct PrismTestHostTests {
         #expect(await prism.startedTasks == [PrismTestHost.TaskStart(taskID: "nap", arguments: ["5"])])
     }
 
-    @Test("a preference change restarts the extension with the new values and the saved state")
+    @Test("a preference change reaches the running extension with its saved state")
     func preferences() async throws {
         let prism = try await PrismTestHost(TallyExtension())
         #expect(try await prism.run("count") == .keepOpen(message: "1."))
