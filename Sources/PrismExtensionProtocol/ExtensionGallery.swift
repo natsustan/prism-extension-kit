@@ -66,6 +66,9 @@ public struct ExtensionGalleryEntry: Hashable, Codable, Sendable, Identifiable {
     public var sourceURL: URL?
     /// This version's changelog entry.
     public var releaseNotes: String?
+    /// The file `manifest.icon.image` names, carried in the signed index so
+    /// the Gallery can draw the extension's mark before it is installed.
+    public var iconImage: Data?
 
     public var id: ExtensionID { manifest.id }
 
@@ -74,17 +77,19 @@ public struct ExtensionGalleryEntry: Hashable, Codable, Sendable, Identifiable {
         package: ExtensionGalleryPackage,
         publishedAt: Date? = nil,
         sourceURL: URL? = nil,
-        releaseNotes: String? = nil
+        releaseNotes: String? = nil,
+        iconImage: Data? = nil
     ) {
         self.manifest = manifest
         self.package = package
         self.publishedAt = ExtensionWireDate.rounded(publishedAt)
         self.sourceURL = sourceURL
         self.releaseNotes = releaseNotes
+        self.iconImage = iconImage
     }
 
     private enum CodingKeys: String, CodingKey {
-        case manifest, package, publishedAt, sourceURL, releaseNotes
+        case manifest, package, publishedAt, sourceURL, releaseNotes, iconImage
     }
 
     public init(from decoder: any Decoder) throws {
@@ -94,6 +99,8 @@ public struct ExtensionGalleryEntry: Hashable, Codable, Sendable, Identifiable {
         publishedAt = try container.decodeDateIfPresent(forKey: .publishedAt)
         sourceURL = try container.decodeIfPresent(URL.self, forKey: .sourceURL)
         releaseNotes = try container.decodeIfPresent(String.self, forKey: .releaseNotes)
+        // An icon Prism cannot read draws the symbol, as an unusable image does.
+        iconImage = (try? container.decodeIfPresent(Data.self, forKey: .iconImage)) ?? nil
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -103,6 +110,7 @@ public struct ExtensionGalleryEntry: Hashable, Codable, Sendable, Identifiable {
         try container.encodeDateIfPresent(publishedAt, forKey: .publishedAt)
         try container.encodeIfPresent(sourceURL, forKey: .sourceURL)
         try container.encodeIfPresent(releaseNotes, forKey: .releaseNotes)
+        try container.encodeIfPresent(iconImage, forKey: .iconImage)
     }
 }
 

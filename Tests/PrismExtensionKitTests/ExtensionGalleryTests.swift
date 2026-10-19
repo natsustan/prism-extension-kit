@@ -20,7 +20,8 @@ struct ExtensionGalleryIndexTests {
                     sha256: "ABCDEF", size: 1234
                 ),
                 publishedAt: Date(timeIntervalSince1970: 1_799_999_000),
-                releaseNotes: "First release."
+                releaseNotes: "First release.",
+                iconImage: Data("<svg/>".utf8)
             )],
             revoked: [ExtensionGalleryRevocation(id: "octocat.sample", versions: ["1.0.0"], reason: "Crashes.")]
         )
@@ -32,6 +33,7 @@ struct ExtensionGalleryIndexTests {
         let decoded = try ExtensionWire.decode(ExtensionGalleryIndex.self, from: ExtensionWire.encode(index))
         #expect(decoded == index)
         #expect(decoded.entry(for: "octocat.sample")?.package.sha256 == "abcdef")
+        #expect(decoded.entry(for: "octocat.sample")?.iconImage == Data("<svg/>".utf8))
         #expect(decoded.revocation(for: "octocat.sample", version: "1.0.0")?.reason == "Crashes.")
         #expect(decoded.revocation(for: "octocat.sample", version: "1.2.0") == nil)
     }
