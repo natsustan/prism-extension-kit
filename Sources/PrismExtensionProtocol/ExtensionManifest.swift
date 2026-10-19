@@ -85,12 +85,7 @@ public struct ExtensionIcon: Hashable, Codable, Sendable {
         image = try container.decodeIfPresent(String.self, forKey: .image)
         app = try container.decodeIfPresent(String.self, forKey: .app)
         // A style from a newer protocol draws the default way.
-        style = (try? container.decodeIfPresent(String.self, forKey: .style)).flatMap { $0.flatMap(Style.init(rawValue:)) }
-    }
-
-    /// Whether the glyph sits on a tile: `.tile`, or no style with no image.
-    public var isTiled: Bool {
-        style.map { $0 == .tile } ?? (image == nil)
+        style = try? container.decodeIfPresent(Style.self, forKey: .style)
     }
 }
 

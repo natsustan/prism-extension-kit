@@ -74,15 +74,14 @@ struct ExtensionListTests {
     @Test("icon styles choose the tile or the glyph alone, and an unknown style draws the default way")
     func iconStyles() throws {
         let glyph = try decode(ExtensionIcon.self, #"{"symbol":"arrow.triangle.pull","tint":"green","style":"glyph"}"#)
-        #expect(glyph.style == .glyph && !glyph.isTiled)
+        #expect(glyph.style == .glyph)
         #expect(try ExtensionWire.roundTrip(glyph) == glyph)
 
         let tiledImage = try decode(ExtensionIcon.self, #"{"symbol":"star","tint":"graphite","image":"icons/mark.svg","style":"tile"}"#)
-        #expect(tiledImage.isTiled)
+        #expect(tiledImage.style == .tile)
 
         let future = try decode(ExtensionIcon.self, #"{"symbol":"star","tint":"blue","style":"hologram"}"#)
-        #expect(future.style == nil && future.isTiled)
-        #expect(try !decode(ExtensionIcon.self, #"{"symbol":"star","tint":"blue","image":"icons/mark.svg"}"#).isTiled)
+        #expect(future.style == nil)
         let plain = try ExtensionWire.encode(ExtensionIcon(symbol: "star", tint: "blue"))
         #expect(!String(decoding: plain, as: UTF8.self).contains("style"))
     }
