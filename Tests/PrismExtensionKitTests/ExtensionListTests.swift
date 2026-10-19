@@ -71,6 +71,22 @@ struct ExtensionListTests {
         #expect(try ExtensionWire.roundTrip(appIcon) == appIcon)
     }
 
+    @Test("icon styles choose the tile or the glyph alone, and an unknown style draws the default way")
+    func iconStyles() throws {
+        let glyph = try decode(ExtensionIcon.self, #"{"symbol":"arrow.triangle.pull","tint":"green","style":"glyph"}"#)
+        #expect(glyph.style == .glyph && !glyph.isTiled)
+        #expect(try ExtensionWire.roundTrip(glyph) == glyph)
+
+        let tiledImage = try decode(ExtensionIcon.self, #"{"symbol":"star","tint":"graphite","image":"icons/mark.svg","style":"tile"}"#)
+        #expect(tiledImage.isTiled)
+
+        let future = try decode(ExtensionIcon.self, #"{"symbol":"star","tint":"blue","style":"hologram"}"#)
+        #expect(future.style == nil && future.isTiled)
+        #expect(try !decode(ExtensionIcon.self, #"{"symbol":"star","tint":"blue","image":"icons/mark.svg"}"#).isTiled)
+        let plain = try ExtensionWire.encode(ExtensionIcon(symbol: "star", tint: "blue"))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("style"))
+    }
+
     @Test("actions reject unsafe URLs and drop unusable shortcuts")
     func actionValidation() throws {
         #expect(throws: DecodingError.self) {

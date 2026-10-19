@@ -142,6 +142,17 @@ PNG of at most 512 KB, drawn as a template in the surrounding color
 `image`. A path that leaves the folder or names another kind of file, or an
 app that is not installed, falls back to the symbol.
 
+`"style"` chooses how the symbol or image is drawn. `"tile"` puts it on the
+tinted tile, as the launcher's command icons, so a brand mark can be the
+extension's icon in root search and settings
+(`{"symbol": "star", "tint": "graphite", "image": "icons/mark.svg", "style": "tile"}`).
+`"glyph"` draws it alone in the tint, for list rows whose color says something,
+such as a pull request's state; `"gray"` then follows the text's secondary
+color. Without a style, a symbol sits on a tile and an image is drawn alone in
+the surrounding color. Tints are `blue`, `teal`, `cyan`, `green`, `gold`,
+`orange`, `red`, `pink`, `violet`, `indigo`, `brown`, `gray`, and `graphite`
+(near-black, for brand marks).
+
 Prism starts the extension on demand and ends it after a minute idle or when
 its process tree uses more than 150 MB. When a preference changes, Prism sends
 the running extension `preferences.update` with every value, then reloads its

@@ -41,23 +41,56 @@ public struct ExtensionID: RawRepresentable, Hashable, Comparable, Codable, Send
 /// A tiled SF Symbol, matching the launcher's command icons, or an installed
 /// app's icon.
 public struct ExtensionIcon: Hashable, Codable, Sendable {
+    /// How the symbol or image is drawn.
+    public enum Style: String, Hashable, Codable, Sendable {
+        /// On a tinted tile, as the launcher's command icons: the glyph is
+        /// white on the tint (in dark appearance, tinted on a dark tile).
+        case tile
+        /// The glyph alone in the tint, for list rows where the color says
+        /// something, such as a pull request's state.
+        case glyph
+    }
+
     public let symbol: String
     /// Semantic tile tint resolved by the presentation layer.
     public let tint: String
-    /// A template image drawn instead of the tile, such as a brand mark: a path
-    /// inside the extension's folder to an SVG, PDF, or PNG of at most 512 KB.
-    /// Anything Prism cannot use falls back to the symbol tile.
+    /// A template image drawn instead of the symbol, such as a brand mark: a
+    /// path inside the extension's folder to an SVG, PDF, or PNG of at most
+    /// 512 KB. Anything Prism cannot use falls back to the symbol.
     public let image: String?
     /// An app's bundle identifier (`com.apple.Notes`): Prism draws that app's
     /// own icon, in color, for an extension that works with the app. Ahead of
     /// `image`; the symbol tile stands in when the app is not installed.
     public let app: String?
+    /// Nil draws a symbol on a tile and an image alone in the surrounding
+    /// color, as before styles existed.
+    public let style: Style?
 
-    public init(symbol: String, tint: String, image: String? = nil, app: String? = nil) {
+    public init(symbol: String, tint: String, image: String? = nil, app: String? = nil, style: Style? = nil) {
         self.symbol = symbol
         self.tint = tint
         self.image = image
         self.app = app
+        self.style = style
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case symbol, tint, image, app, style
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        symbol = try container.decode(String.self, forKey: .symbol)
+        tint = try container.decode(String.self, forKey: .tint)
+        image = try container.decodeIfPresent(String.self, forKey: .image)
+        app = try container.decodeIfPresent(String.self, forKey: .app)
+        // A style from a newer protocol draws the default way.
+        style = (try? container.decodeIfPresent(String.self, forKey: .style)).flatMap { $0.flatMap(Style.init(rawValue:)) }
+    }
+
+    /// Whether the glyph sits on a tile: `.tile`, or no style with no image.
+    public var isTiled: Bool {
+        style.map { $0 == .tile } ?? (image == nil)
     }
 }
 
