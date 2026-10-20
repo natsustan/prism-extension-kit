@@ -170,22 +170,46 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
     /// The default action: what Return does.
     public var primaryAction: ExtensionAction? { actions.first }
 
-    public func action(id: String) -> ExtensionAction? {
-        actions.first { $0.id == id }
+    /// Every action, submenus' included, as shortcuts and `action.perform`
+    /// find them.
+    public var allActions: [ExtensionAction] {
+        actions.flatMap { [$0] + $0.actions }
     }
 
+    public func action(id: String) -> ExtensionAction? {
+        allActions.first { $0.id == id }
+    }
+
+    /// IDs stay unique across the item, submenus included; submenus nest one
+    /// level, and one left without actions is dropped.
     func normalized() -> ExtensionListItem {
         var seen = Set<String>()
-        let kept = actions.filter { seen.insert($0.id).inserted }.prefix(Self.maximumActions)
+        var kept = [ExtensionAction]()
+        for action in actions where kept.count < Self.maximumActions && seen.insert(action.id).inserted {
+            guard action.isSubmenu else {
+                kept.append(action)
+                continue
+            }
+            let children = action.actions
+                .filter { !$0.isSubmenu && seen.insert($0.id).inserted }
+                .prefix(Self.maximumActions)
+            if !children.isEmpty { kept.append(action.with(actions: Array(children))) }
+        }
         return ExtensionListItem(
             id: id, title: title, subtitle: subtitle, icon: icon, accessories: accessories,
-            keywords: keywords, section: section, detail: detail, actions: Array(kept), isLoading: isLoading
+            keywords: keywords, section: section, detail: detail, actions: kept, isLoading: isLoading
         )
     }
 }
 
 /// A trailing label on a list item.
 public struct ExtensionListAccessory: Hashable, Codable, Sendable {
+    public enum Style: String, Hashable, Codable, Sendable {
+        case plain
+        /// The text sits in a capsule tinted like it, as a tag or a port.
+        case tag
+    }
+
     public let text: String?
     public let symbol: String?
     /// Semantic tint, as for icons. Secondary when omitted.
@@ -193,16 +217,43 @@ public struct ExtensionListAccessory: Hashable, Codable, Sendable {
     public let help: String?
     /// A small ring before the text.
     public let meter: ExtensionMeter?
+    public let style: Style
 
     public init(
         text: String? = nil, symbol: String? = nil, tint: String? = nil, help: String? = nil,
-        meter: ExtensionMeter? = nil
+        meter: ExtensionMeter? = nil, style: Style = .plain
     ) {
         self.text = text
         self.symbol = symbol
         self.tint = tint
         self.help = help
         self.meter = meter
+        self.style = style
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case text, symbol, tint, help, meter, style
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        symbol = try container.decodeIfPresent(String.self, forKey: .symbol)
+        tint = try container.decodeIfPresent(String.self, forKey: .tint)
+        help = try container.decodeIfPresent(String.self, forKey: .help)
+        meter = try container.decodeIfPresent(ExtensionMeter.self, forKey: .meter)
+        // A style from a newer Kit draws plain rather than failing the list.
+        style = (try? container.decodeIfPresent(Style.self, forKey: .style)) ?? .plain
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encodeIfPresent(symbol, forKey: .symbol)
+        try container.encodeIfPresent(tint, forKey: .tint)
+        try container.encodeIfPresent(help, forKey: .help)
+        try container.encodeIfPresent(meter, forKey: .meter)
+        if style != .plain { try container.encode(style, forKey: .style) }
     }
 }
 
@@ -366,7 +417,7 @@ public struct ExtensionMetadataRow: Hashable, Codable, Sendable {
 /// Wire form: `{"id", "title", "kind": "perform" | "copy" | "open" |
 /// "grantFolder", ...}`. `perform` (the default) sends `action.perform` to the
 /// extension; `copy`, `open`, and `grantFolder` are carried out by Prism
-/// without a round trip.
+/// without a round trip. An action with `"actions"` is a submenu instead.
 public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
     public enum Kind: Hashable, Sendable {
         case perform
@@ -395,6 +446,12 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
     /// The confirmation's explanation. Destructive actions always confirm;
     /// any other action with a message confirms too.
     public let confirmationMessage: String?
+    /// A submenu: choosing this action shows these in the ⌘K panel instead
+    /// of running it. One level deep; their IDs are unique across the item,
+    /// and their shortcuts work from the list as well.
+    public let actions: [ExtensionAction]
+
+    public var isSubmenu: Bool { !actions.isEmpty }
 
     public init(
         id: String,
@@ -403,7 +460,8 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         kind: Kind = .perform,
         style: Style = .regular,
         shortcut: ExtensionShortcut? = nil,
-        confirmationMessage: String? = nil
+        confirmationMessage: String? = nil,
+        actions: [ExtensionAction] = []
     ) {
         self.id = id
         self.title = title
@@ -412,10 +470,18 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         self.style = style
         self.shortcut = shortcut
         self.confirmationMessage = confirmationMessage
+        self.actions = actions
+    }
+
+    func with(actions: [ExtensionAction]) -> ExtensionAction {
+        ExtensionAction(
+            id: id, title: title, symbol: symbol, kind: kind, style: style, shortcut: shortcut,
+            confirmationMessage: confirmationMessage, actions: actions
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, symbol, kind, text, url, folder, style, shortcut, confirmationMessage
+        case id, title, symbol, kind, text, url, folder, style, shortcut, confirmationMessage, actions
     }
 
     private enum KindName: String, Codable {
@@ -449,6 +515,7 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         shortcut = (try? container.decodeIfPresent(String.self, forKey: .shortcut))
             .flatMap { $0.flatMap(ExtensionShortcut.init) }
         confirmationMessage = try container.decodeIfPresent(String.self, forKey: .confirmationMessage)
+        actions = try container.decodeIfPresent([ExtensionAction].self, forKey: .actions) ?? []
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -472,6 +539,7 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         try container.encode(style, forKey: .style)
         try container.encodeIfPresent(shortcut?.description, forKey: .shortcut)
         try container.encodeIfPresent(confirmationMessage, forKey: .confirmationMessage)
+        if !actions.isEmpty { try container.encode(actions, forKey: .actions) }
     }
 }
 

@@ -146,6 +146,47 @@ struct ExtensionListTests {
         #expect(list.filters.map(\.title) == ["F"])
     }
 
+    @Test("a tag accessory round-trips, and plain or unknown styles draw plain")
+    func accessoryStyles() throws {
+        let tag = try decode(ExtensionListAccessory.self, #"{"text":"3000","tint":"green","style":"tag"}"#)
+        #expect(tag == ExtensionListAccessory(text: "3000", tint: "green", style: .tag))
+        #expect(try ExtensionWire.roundTrip(tag) == tag)
+        #expect(try decode(ExtensionListAccessory.self, #"{"text":"3","style":"hologram"}"#).style == .plain)
+        let plain = try ExtensionWire.encode(ExtensionListAccessory(text: "3"))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("style"))
+    }
+
+    @Test("a submenu's actions round-trip and are found by ID, and normalizing keeps one level of unique IDs")
+    func submenus() throws {
+        let item = try decode(ExtensionListItem.self, #"""
+        {"id":"a","title":"A","actions":[
+          {"id":"open","title":"Open"},
+          {"id":"copy","title":"Copy","shortcut":"cmd+shift+c","actions":[
+            {"id":"copy-name","title":"Copy Name","kind":"copy","text":"A","shortcut":"cmd+shift+n"},
+            {"id":"copy-id","title":"Copy ID","kind":"copy","text":"a"}]}]}
+        """#)
+        #expect(item.actions.map(\.id) == ["open", "copy"])
+        #expect(item.actions[1].isSubmenu && !item.actions[0].isSubmenu)
+        #expect(item.allActions.map(\.id) == ["open", "copy", "copy-name", "copy-id"])
+        #expect(item.action(id: "copy-id")?.kind == .copy(text: "a"))
+        #expect(try ExtensionWire.roundTrip(item) == item)
+        let plain = try ExtensionWire.encode(ExtensionAction(id: "x", title: "X"))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("actions"))
+
+        let nested = ExtensionAction(id: "deep", title: "Deep", actions: [ExtensionAction(id: "deeper", title: "Deeper")])
+        let list = ExtensionList(items: [ExtensionListItem(id: "1", title: "One", actions: [
+            ExtensionAction(id: "open", title: "Open"),
+            ExtensionAction(id: "more", title: "More", actions: [
+                ExtensionAction(id: "open", title: "Open Again"), nested, ExtensionAction(id: "copy", title: "Copy"),
+            ]),
+            ExtensionAction(id: "copy", title: "Copy Again"),
+            ExtensionAction(id: "empty", title: "Empty", actions: [ExtensionAction(id: "open", title: "Open Once More")]),
+        ])]).normalized()
+        let actions = list.items[0].actions
+        #expect(actions.map(\.id) == ["open", "more"])
+        #expect(actions[1].actions.map(\.id) == ["copy"])
+    }
+
     @Test("action results carry the command result fields plus reload")
     func actionResults() throws {
         let reload = try decode(ExtensionActionResult.self, #"{"kind":"keepOpen","message":"Saved","reload":true}"#)

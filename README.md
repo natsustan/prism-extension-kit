@@ -95,7 +95,20 @@ must stay the same across reloads. An action is `{"id", "title", "symbol",
 "kind": "perform" | "copy" | "open" | "grantFolder", "text" | "url" | "folder",
 "style": "destructive", "shortcut": "cmd+shift+c", "confirmationMessage"}`;
 destructive actions, and any action with a `confirmationMessage`, ask before
-they run. The first action runs on Return. `query` is empty unless the list sets `"filtering": "extension"`;
+they run. The first action runs on Return. An action with `"actions": [...]`
+is a submenu, such as Copy… or Kill…: choosing it, by Return, its shortcut, or
+in ⌘K, shows those actions in the ⌘K panel under its title, and Esc steps
+back. Submenus nest one level; every action ID is unique across the item,
+submenus included, and a submenu's actions answer to their shortcuts from the
+list too. An older Prism shows a submenu as a plain action that performs its
+own ID, so handle that ID or set `minPrism`.
+
+An accessory is `{"text", "symbol", "tint", "help", "meter", "style"}`;
+`"style": "tag"` draws the text in a capsule tinted like it, as a label or a
+port number, and an older Prism draws it as plain tinted text. A row shows
+its accessories in order and leaves out the last ones that don't fit beside
+the title, so put the most telling one first and say the rest in `help` or
+the detail. `query` is empty unless the list sets `"filtering": "extension"`;
 `filter` is `null` until the user picks one of `filters` with ⌘P.
 
 Gauges use a meter, `{"fraction": 0...1, "tone": "normal" | "warning" |
