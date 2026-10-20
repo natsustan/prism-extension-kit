@@ -6,7 +6,8 @@ import Foundation
 /// Wire form: `{"kind": "completed" | "keepOpen" | "failed", "message": …,
 /// "restoreFocus": …, "hud": …}`; `message` is optional for `completed`,
 /// `restoreFocus` defaults to false, and `"hud": true` on a `completed` with a
-/// message is `hud`, which an older Prism reads as a plain `completed`.
+/// message is `hud`, which an older Prism reads as a plain `completed`. An
+/// empty HUD message closes the launcher without showing a HUD.
 public enum ExtensionCommandResult: Hashable, Codable, Sendable {
     /// Done: the launcher closes. `restoreFocus` returns to the summoning app.
     case completed(message: String?, restoreFocus: Bool)
@@ -31,7 +32,8 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
         let message = try container.decodeIfPresent(String.self, forKey: .message)
         switch try container.decode(Kind.self, forKey: .kind) {
         case .completed:
-            if let message, !message.isEmpty, try container.decodeIfPresent(Bool.self, forKey: .hud) == true {
+            // `hud` only dresses up a result: an unreadable value leaves a plain `completed`.
+            if let message, (try? container.decodeIfPresent(Bool.self, forKey: .hud)) == true {
                 self = .hud(message: message)
                 return
             }

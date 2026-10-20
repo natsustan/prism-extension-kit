@@ -162,11 +162,17 @@ struct ExtensionListTests {
         let older = try JSONDecoder().decode(OlderCommandResult.self, from: ExtensionWire.encode(hud))
         #expect(older.kind == "completed" && older.message == "Copied #FF6363" && older.restoreFocus)
 
-        // A HUD needs something to say.
+        // A HUD needs a message; an empty one survives the wire and only closes.
         #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","hud":true}"#)
             == .completed(message: nil, restoreFocus: false))
+        #expect(try ExtensionWire.roundTrip(ExtensionCommandResult.hud(message: "")) == .hud(message: ""))
         #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","message":"Hi","hud":false}"#)
             == .completed(message: "Hi", restoreFocus: false))
+        // An unreadable flag leaves the result readable.
+        for flag in ["1", #""true""#, "null"] {
+            #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","message":"Hi","hud":\#(flag)}"#)
+                == .completed(message: "Hi", restoreFocus: false))
+        }
         #expect(try decode(ExtensionActionResult.self, #"{"kind":"completed","message":"Saved","hud":true}"#)
             == ExtensionActionResult(.hud(message: "Saved")))
     }

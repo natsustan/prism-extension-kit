@@ -122,14 +122,16 @@ action again whenever the read fails.
 A `no-view` command that works with the user outside Prism, such as a screen
 color sampler, sets `"interactive": true`. Prism closes the launcher before it
 runs, waits up to five minutes for the result instead of the usual 15
-seconds, and shows a `keepOpen` or `failed` message as feedback. Only a
-`no-view` command can be interactive.
+seconds, and shows a `keepOpen` or `failed` message in a HUD, or in the
+launcher if the user has opened it again. Only a `no-view` command can be
+interactive.
 
 A `completed` result with a `message` and `"hud": true` (`.hud(message:)` in
 Swift) closes the launcher, returns focus, and shows the message briefly in a
 HUD near the bottom of the screen, for a result worth confirming once the
 launcher is gone, such as “Copied #FF6363”. It works from root search, a
-hotkey, and a list action; an older Prism closes without it.
+hotkey, a widget, and a list action; an empty message closes without a HUD,
+and an older Prism closes without it.
 
 A `list` command that searches an app can say which one with
 `"searchesApp": "<bundle id>"` (`"com.apple.Notes"`, matched ignoring case).
