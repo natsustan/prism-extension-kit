@@ -121,6 +121,8 @@ public enum ExtensionFolderValidator {
             "Folder \(path) must be an absolute path or start with ~/, without . or .. steps."
         case let .invalidAppSearch(command):
             "Command “\(command)” sets searchesApp, which needs a list command and an app's bundle ID."
+        case let .invalidInteractiveCommand(command):
+            "Command “\(command)” sets interactive, which only a no-view command can be."
         case let .invalidPreferenceDefault(id, type):
             "The default of preference “\(id)” is not a \(type.defaultDescription)."
         }

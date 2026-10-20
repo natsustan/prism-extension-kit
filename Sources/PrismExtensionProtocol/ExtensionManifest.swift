@@ -38,8 +38,8 @@ public struct ExtensionID: RawRepresentable, Hashable, Comparable, Codable, Send
     }
 }
 
-/// A tiled SF Symbol, matching the launcher's command icons, or an installed
-/// app's icon.
+/// A tiled SF Symbol, matching the launcher's command icons, an installed
+/// app's icon, or a color swatch.
 public struct ExtensionIcon: Hashable, Codable, Sendable {
     /// How the symbol or image is drawn.
     public enum Style: String, Hashable, Codable, Sendable {
@@ -65,17 +65,44 @@ public struct ExtensionIcon: Hashable, Codable, Sendable {
     /// Nil draws a symbol on a tile and an image alone in the surrounding
     /// color, as before styles existed.
     public let style: Style?
+    /// An sRGB color as `#RRGGBB` or `#RRGGBBAA`, drawn as a solid tile for
+    /// rows that are colors, ahead of `app` and `image`. Only the extension's
+    /// own views draw it; elsewhere, on an older Prism, or for a value Prism
+    /// cannot read, the rest of the icon stands in.
+    public let swatch: String?
 
-    public init(symbol: String, tint: String, image: String? = nil, app: String? = nil, style: Style? = nil) {
+    public init(
+        symbol: String, tint: String, image: String? = nil, app: String? = nil, style: Style? = nil,
+        swatch: String? = nil
+    ) {
         self.symbol = symbol
         self.tint = tint
         self.image = image
         self.app = app
         self.style = style
+        self.swatch = swatch
+    }
+
+    /// A swatch of `hex`, with a gray circle for Prism versions that cannot
+    /// draw one.
+    public static func swatch(_ hex: String) -> ExtensionIcon {
+        ExtensionIcon(symbol: "circle.fill", tint: "gray", swatch: hex)
+    }
+
+    /// The swatch's red, green, blue, and alpha, each 0...1, or nil when
+    /// there is none or it is not `#RRGGBB` / `#RRGGBBAA`.
+    public var swatchComponents: (red: Double, green: Double, blue: Double, alpha: Double)? {
+        guard let swatch, swatch.first == "#" else { return nil }
+        let digits = swatch.dropFirst()
+        guard digits.count == 6 || digits.count == 8, digits.allSatisfy(\.isHexDigit),
+              let value = UInt64(digits, radix: 16) else { return nil }
+        let rgba = digits.count == 6 ? value << 8 | 0xFF : value
+        func component(_ shift: UInt64) -> Double { Double(rgba >> shift & 0xFF) / 255 }
+        return (component(24), component(16), component(8), component(0))
     }
 
     private enum CodingKeys: String, CodingKey {
-        case symbol, tint, image, app, style
+        case symbol, tint, image, app, style, swatch
     }
 
     public init(from decoder: any Decoder) throws {
@@ -86,6 +113,8 @@ public struct ExtensionIcon: Hashable, Codable, Sendable {
         app = try container.decodeIfPresent(String.self, forKey: .app)
         // A style from a newer protocol draws the default way.
         style = try? container.decodeIfPresent(Style.self, forKey: .style)
+        // A swatch Prism cannot read draws the rest of the icon, not a failed list.
+        swatch = (try? container.decodeIfPresent(String.self, forKey: .swatch)) ?? nil
     }
 }
 
@@ -114,6 +143,14 @@ public struct ExtensionCommand: Hashable, Codable, Sendable, Identifiable {
     /// root-search row then opens the command with Tab, as Spotlight searches
     /// inside an app.
     public let searchesApp: String?
+    /// A `no-view` command that works with the user outside Prism, such as a
+    /// screen color sampler: Prism closes the launcher before running it,
+    /// waits up to `ExtensionCommand.interactiveTimeout` instead of the usual
+    /// request timeout, and shows a message the result carries as feedback.
+    public let interactive: Bool
+
+    /// How long Prism waits for an interactive command.
+    public static let interactiveTimeout: Duration = .seconds(300)
 
     public init(
         id: String,
@@ -124,7 +161,8 @@ public struct ExtensionCommand: Hashable, Codable, Sendable, Identifiable {
         aliases: [String] = [],
         icon: ExtensionIcon? = nil,
         liveStatus: Bool = false,
-        searchesApp: String? = nil
+        searchesApp: String? = nil,
+        interactive: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -135,10 +173,11 @@ public struct ExtensionCommand: Hashable, Codable, Sendable, Identifiable {
         self.icon = icon
         self.liveStatus = liveStatus
         self.searchesApp = searchesApp
+        self.interactive = interactive
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, subtitle, mode, keywords, aliases, icon, liveStatus, searchesApp
+        case id, title, subtitle, mode, keywords, aliases, icon, liveStatus, searchesApp, interactive
     }
 
     public init(from decoder: any Decoder) throws {
@@ -152,6 +191,7 @@ public struct ExtensionCommand: Hashable, Codable, Sendable, Identifiable {
         icon = try container.decodeIfPresent(ExtensionIcon.self, forKey: .icon)
         liveStatus = try container.decodeIfPresent(Bool.self, forKey: .liveStatus) ?? false
         searchesApp = try container.decodeIfPresent(String.self, forKey: .searchesApp)
+        interactive = try container.decodeIfPresent(Bool.self, forKey: .interactive) ?? false
     }
 }
 
@@ -518,6 +558,8 @@ public enum ExtensionManifestError: Error, Equatable, Sendable {
     case invalidFolderPath(String)
     /// `searchesApp` on a command that is not a `list`, or an empty one.
     case invalidAppSearch(command: String)
+    /// `interactive` on a command that is not `no-view`.
+    case invalidInteractiveCommand(command: String)
     case invalidPreferenceDefault(id: String, type: ExtensionPreferenceType)
 }
 
@@ -552,6 +594,9 @@ public extension ExtensionManifest {
             guard command.mode == .list, !app.trimmingCharacters(in: .whitespaces).isEmpty else {
                 throw ExtensionManifestError.invalidAppSearch(command: command.id)
             }
+        }
+        for command in commands where command.interactive && command.mode != .noView {
+            throw ExtensionManifestError.invalidInteractiveCommand(command: command.id)
         }
         for task in tasks where !task.executable.hasPrefix("/") {
             throw ExtensionManifestError.invalidTaskExecutable(task.executable)

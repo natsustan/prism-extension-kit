@@ -4,17 +4,22 @@ import Foundation
 /// host can map it without interpretation.
 ///
 /// Wire form: `{"kind": "completed" | "keepOpen" | "failed", "message": …,
-/// "restoreFocus": …}`; `message` is optional for `completed` and
-/// `restoreFocus` defaults to false.
+/// "restoreFocus": …, "hud": …}`; `message` is optional for `completed`,
+/// `restoreFocus` defaults to false, and `"hud": true` on a `completed` with a
+/// message is `hud`, which an older Prism reads as a plain `completed`.
 public enum ExtensionCommandResult: Hashable, Codable, Sendable {
     /// Done: the launcher closes. `restoreFocus` returns to the summoning app.
     case completed(message: String?, restoreFocus: Bool)
     /// Done, and the launcher stays open to show the message.
     case keepOpen(message: String)
     case failed(message: String)
+    /// Done: the launcher closes, focus returns, and Prism shows the message
+    /// briefly in a HUD, for a result worth confirming once the launcher is
+    /// gone ("Copied #FF6363").
+    case hud(message: String)
 
     private enum CodingKeys: String, CodingKey {
-        case kind, message, restoreFocus
+        case kind, message, restoreFocus, hud
     }
 
     private enum Kind: String, Codable {
@@ -26,6 +31,10 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
         let message = try container.decodeIfPresent(String.self, forKey: .message)
         switch try container.decode(Kind.self, forKey: .kind) {
         case .completed:
+            if let message, !message.isEmpty, try container.decodeIfPresent(Bool.self, forKey: .hud) == true {
+                self = .hud(message: message)
+                return
+            }
             self = .completed(
                 message: message,
                 restoreFocus: try container.decodeIfPresent(Bool.self, forKey: .restoreFocus) ?? false
@@ -50,6 +59,11 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
         case let .failed(message):
             try container.encode(Kind.failed, forKey: .kind)
             try container.encode(message, forKey: .message)
+        case let .hud(message):
+            try container.encode(Kind.completed, forKey: .kind)
+            try container.encode(message, forKey: .message)
+            try container.encode(true, forKey: .restoreFocus)
+            try container.encode(true, forKey: .hud)
         }
     }
 }

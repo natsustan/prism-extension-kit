@@ -74,7 +74,7 @@ values the way Prism does when a preference changes.
 | --- | --- | --- |
 | Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory}` | `{"updatesPreferences": true}`, or `{}` |
 | Prism → extension | `preferences.update` `{preferences}` | none; only to an extension that replied `updatesPreferences` |
-| Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus"}` |
+| Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus", "hud"}` |
 | Prism → extension | `status.subscribe` `{commandID, session}` | `{}`, then `status.update` notifications |
 | Prism → extension | `status.unsubscribe` `{session}` | none |
 | Prism → extension | `widget.load` `{widgetID}` | the template's fields plus `"template"` |
@@ -119,6 +119,18 @@ Disk Access is needed. A grant lapses when its folder moves or goes away,
 or when a new version stops declaring it at the same path, so offer the
 action again whenever the read fails.
 
+A `no-view` command that works with the user outside Prism, such as a screen
+color sampler, sets `"interactive": true`. Prism closes the launcher before it
+runs, waits up to five minutes for the result instead of the usual 15
+seconds, and shows a `keepOpen` or `failed` message as feedback. Only a
+`no-view` command can be interactive.
+
+A `completed` result with a `message` and `"hud": true` (`.hud(message:)` in
+Swift) closes the launcher, returns focus, and shows the message briefly in a
+HUD near the bottom of the screen, for a result worth confirming once the
+launcher is gone, such as “Copied #FF6363”. It works from root search, a
+hotkey, and a list action; an older Prism closes without it.
+
 A `list` command that searches an app can say which one with
 `"searchesApp": "<bundle id>"` (`"com.apple.Notes"`, matched ignoring case).
 When that app's row is selected in root search, it offers the command, and
@@ -140,7 +152,11 @@ PNG of at most 512 KB, drawn as a template in the surrounding color
 (`"icons/mark.svg"`); or, with `app`, an installed app's bundle identifier
 (`"com.apple.Notes"`), drawn as that app's own icon. `app` comes before
 `image`. A path that leaves the folder or names another kind of file, or an
-app that is not installed, falls back to the symbol.
+app that is not installed, falls back to the symbol. With `swatch`, an sRGB
+color as `#RRGGBB` or `#RRGGBBAA`, a row that is a color draws that color as a
+solid tile, ahead of `app` and `image` (`ExtensionIcon.swatch("#FF6363")` in
+Swift). Only the extension's own views draw swatches; root search, an older
+Prism, and a value it cannot read draw the rest of the icon instead.
 
 `"style"` chooses how the symbol or image is drawn. `"tile"` puts it on the
 tinted tile, as the launcher's command icons, so a brand mark can be the

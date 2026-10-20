@@ -86,6 +86,27 @@ struct ExtensionListTests {
         #expect(!String(decoding: plain, as: UTF8.self).contains("style"))
     }
 
+    @Test("a swatch icon reads #RRGGBB and #RRGGBBAA and keeps a symbol for older Prism")
+    func swatchIcons() throws {
+        let swatch = try decode(ExtensionIcon.self, ##"{"symbol":"circle.fill","tint":"gray","swatch":"#FF6363"}"##)
+        #expect(swatch == .swatch("#FF6363"))
+        #expect(try ExtensionWire.roundTrip(swatch) == swatch)
+        let opaque = try #require(swatch.swatchComponents)
+        #expect(opaque.red == 1 && opaque.green == 99.0 / 255 && opaque.blue == 99.0 / 255 && opaque.alpha == 1)
+
+        let translucent = try #require(ExtensionIcon.swatch("#00ff0080").swatchComponents)
+        #expect(translucent.green == 1 && translucent.alpha == 128.0 / 255)
+
+        for unreadable in ["FF6363", "#FF636", "#GG6363", "#+F6363", "#FF6363FF00", ""] {
+            #expect(ExtensionIcon.swatch(unreadable).swatchComponents == nil)
+        }
+        #expect(ExtensionIcon(symbol: "star", tint: "blue").swatchComponents == nil)
+        let wrongType = try decode(ExtensionIcon.self, #"{"symbol":"star","tint":"blue","swatch":16737123}"#)
+        #expect(wrongType == ExtensionIcon(symbol: "star", tint: "blue"))
+        let plain = try ExtensionWire.encode(ExtensionIcon(symbol: "star", tint: "blue"))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("swatch"))
+    }
+
     @Test("actions reject unsafe URLs and drop unusable shortcuts")
     func actionValidation() throws {
         #expect(throws: DecodingError.self) {
@@ -132,6 +153,29 @@ struct ExtensionListTests {
         let done = try decode(ExtensionActionResult.self, #"{"kind":"completed"}"#)
         #expect(done == ExtensionActionResult(.completed(message: nil, restoreFocus: false)))
         #expect(try ExtensionWire.roundTrip(ExtensionActionResult.done) == .done)
+    }
+
+    @Test("a HUD result travels as a completed one, so an older Prism just closes")
+    func hudResults() throws {
+        let hud = ExtensionCommandResult.hud(message: "Copied #FF6363")
+        #expect(try ExtensionWire.roundTrip(hud) == hud)
+        let older = try JSONDecoder().decode(OlderCommandResult.self, from: ExtensionWire.encode(hud))
+        #expect(older.kind == "completed" && older.message == "Copied #FF6363" && older.restoreFocus)
+
+        // A HUD needs something to say.
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","hud":true}"#)
+            == .completed(message: nil, restoreFocus: false))
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","message":"Hi","hud":false}"#)
+            == .completed(message: "Hi", restoreFocus: false))
+        #expect(try decode(ExtensionActionResult.self, #"{"kind":"completed","message":"Saved","hud":true}"#)
+            == ExtensionActionResult(.hud(message: "Saved")))
+    }
+
+    /// What Prism read before `hud` existed.
+    private struct OlderCommandResult: Decodable {
+        let kind: String
+        let message: String?
+        let restoreFocus: Bool
     }
 
     @Test("the runtime serves lists, details, and actions that write state")
