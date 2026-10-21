@@ -185,6 +185,19 @@ struct ExtensionListTests {
         let actions = list.items[0].actions
         #expect(actions.map(\.id) == ["open", "more"])
         #expect(actions[1].actions.map(\.id) == ["copy"])
+
+        // A child cut by the cap, or a submenu dropped for being empty, leaves
+        // its ID to the action that comes later.
+        let crowded = ExtensionList(items: [ExtensionListItem(id: "1", title: "One", actions: [
+            ExtensionAction(id: "many", title: "Many", actions: (0...ExtensionListItem.maximumActions).map {
+                ExtensionAction(id: "child-\($0)", title: "Child")
+            }),
+            ExtensionAction(id: "lonely", title: "Lonely", actions: [ExtensionAction(id: "many", title: "Again")]),
+            ExtensionAction(id: "child-\(ExtensionListItem.maximumActions)", title: "Kept"),
+            ExtensionAction(id: "lonely", title: "Lonely Kept"),
+        ])]).normalized().items[0].actions
+        #expect(crowded.map(\.id) == ["many", "child-\(ExtensionListItem.maximumActions)", "lonely"])
+        #expect(crowded[0].actions.count == ExtensionListItem.maximumActions)
     }
 
     @Test("action results carry the command result fields plus reload")

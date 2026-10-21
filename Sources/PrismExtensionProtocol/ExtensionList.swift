@@ -190,10 +190,17 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
                 kept.append(action)
                 continue
             }
-            let children = action.actions
-                .filter { !$0.isSubmenu && seen.insert($0.id).inserted }
-                .prefix(Self.maximumActions)
-            if !children.isEmpty { kept.append(action.with(actions: Array(children))) }
+            // An ID counts as taken only once its action is kept.
+            var children = [ExtensionAction]()
+            for child in action.actions where children.count < Self.maximumActions && !child.isSubmenu
+                && seen.insert(child.id).inserted {
+                children.append(child)
+            }
+            if children.isEmpty {
+                seen.remove(action.id)
+            } else {
+                kept.append(action.with(actions: children))
+            }
         }
         return ExtensionListItem(
             id: id, title: title, subtitle: subtitle, icon: icon, accessories: accessories,
