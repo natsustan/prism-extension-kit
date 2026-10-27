@@ -93,9 +93,20 @@ A list item is `{"id", "title", "subtitle", "icon", "accessories", "keywords",
 "section", "detail", "actions"}`; only `id` and `title` are required, and IDs
 must stay the same across reloads. An action is `{"id", "title", "symbol",
 "kind": "perform" | "copy" | "open" | "grantFolder", "text" | "url" | "folder",
-"style": "destructive", "shortcut": "cmd+shift+c", "confirmationMessage"}`;
-destructive actions, and any action with a `confirmationMessage`, ask before
-they run. The first action runs on Return. An action with `"actions": [...]`
+"style": "destructive", "shortcut": "cmd+shift+c", "confirmationMessage",
+"interactive"}`; destructive actions, and any action with a
+`confirmationMessage`, ask before they run. The first action runs on Return.
+An `open` action opens its `url` with the app that handles it: a web page, a
+file, or another app's link such as `cleanshot://capture-area` (Prism says
+so when no app on the Mac opens it); `javascript:`, `vbscript:`, `data:`, and
+`blob:` URLs are refused. An item drops an action it can't read, such as one
+with a kind or URL this Prism doesn't know, and keeps the rest; a Prism
+before that fails the whole list instead, so set `minPrism` when a list
+relies on an app link. A `perform` or `open` action with `"interactive": true`
+works with the user outside Prism, as an interactive command does (see
+below): Prism closes the launcher and returns focus first, then performs it
+with the longer wait and shows its message in a HUD; an older Prism runs it
+with the launcher open. An action with `"actions": [...]`
 is a submenu, such as Copy… or Kill…: choosing it, by Return, its shortcut, or
 in ⌘K, shows those actions in the ⌘K panel under its title, and Esc steps
 back. Submenus nest one level; every action ID is unique across the item,
@@ -137,7 +148,7 @@ color sampler, sets `"interactive": true`. Prism closes the launcher before it
 runs, waits up to five minutes for the result instead of the usual 15
 seconds, and shows a `keepOpen` or `failed` message in a HUD, or in the
 launcher if the user has opened it again. Only a `no-view` command can be
-interactive.
+interactive; in a list, each action says so for itself.
 
 A `completed` result with a `message` and `"hud": true` (`.hud(message:)` in
 Swift) closes the launcher, returns focus, and shows the message briefly in a
