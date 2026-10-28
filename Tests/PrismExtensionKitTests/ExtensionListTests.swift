@@ -151,10 +151,16 @@ struct ExtensionListTests {
           {"id":"more","title":"More","actions":[
             {"id":"bad","title":"Bad","kind":"copy"},
             {"id":"site","title":"Site","kind":"open","url":"https://example.com"}]},
+          {"id":"future","title":"Future","actions":[
+            {"id":"warp","title":"Warp","kind":"warp"}]},
+          {"id":"leaf","title":"Leaf","actions":[]},
           "not an action"]}
         """#)
-        #expect(item.actions.map(\.id) == ["copy", "more"])
+        // A submenu with nothing readable goes too, rather than performing
+        // its own ID; an empty list of actions was never a submenu.
+        #expect(item.actions.map(\.id) == ["copy", "more", "leaf"])
         #expect(item.actions[1].actions.map(\.id) == ["site"])
+        #expect(!item.actions[2].isSubmenu && item.actions[2].kind == .perform)
     }
 
     @Test("an interactive action round-trips, and a plain one leaves the field out")

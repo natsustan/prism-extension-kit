@@ -163,7 +163,7 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
         keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
         section = try container.decodeIfPresent(String.self, forKey: .section)
         detail = try container.decodeIfPresent(ExtensionDetail.self, forKey: .detail)
-        actions = try container.decodeActions(forKey: .actions)
+        actions = try container.decodeActions(forKey: .actions).readable
         isLoading = try container.decodeIfPresent(Bool.self, forKey: .isLoading) ?? false
     }
 
@@ -545,7 +545,15 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
             .flatMap { $0.flatMap(ExtensionShortcut.init) }
         confirmationMessage = try container.decodeIfPresent(String.self, forKey: .confirmationMessage)
         interactive = (try? container.decodeIfPresent(Bool.self, forKey: .interactive)) ?? false
-        actions = try container.decodeActions(forKey: .actions)
+        let children = try container.decodeActions(forKey: .actions)
+        // A submenu left with nothing to show is unreadable itself, rather
+        // than a plain action that performs the submenu's ID.
+        guard children.offered == 0 || !children.readable.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .actions, in: container, debugDescription: "None of this submenu's actions can be read."
+            )
+        }
+        actions = children.readable
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -575,10 +583,12 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
 }
 
 private extension KeyedDecodingContainer {
-    /// The actions this Prism can read; the others are dropped, so one action
-    /// from a newer Kit never costs the user the whole list.
-    func decodeActions(forKey key: Key) throws -> [ExtensionAction] {
-        try decodeIfPresent([Readable<ExtensionAction>].self, forKey: key)?.compactMap(\.value) ?? []
+    /// The actions this Prism can read, out of how many were offered; the
+    /// others are dropped, so one action from a newer Kit never costs the
+    /// user the whole list.
+    func decodeActions(forKey key: Key) throws -> (readable: [ExtensionAction], offered: Int) {
+        let offered = try decodeIfPresent([Readable<ExtensionAction>].self, forKey: key) ?? []
+        return (offered.compactMap(\.value), offered.count)
     }
 }
 
