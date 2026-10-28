@@ -231,6 +231,27 @@ struct ExtensionListTests {
             == ExtensionActionResult(.hud(message: "Saved")))
     }
 
+    @Test("a paste result travels as a completed one, so an older Prism just closes")
+    func pasteResults() throws {
+        let paste = ExtensionCommandResult.paste(text: "Lorem ipsum\n\ndolor sit amet.")
+        #expect(try ExtensionWire.roundTrip(paste) == paste)
+        let older = try JSONDecoder().decode(OlderCommandResult.self, from: ExtensionWire.encode(paste))
+        #expect(older.kind == "completed" && older.message == nil && older.restoreFocus)
+
+        // Paste wins over a HUD, and empty text is still a paste.
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","message":"Hi","hud":true,"paste":"x"}"#)
+            == .paste(text: "x"))
+        #expect(try ExtensionWire.roundTrip(ExtensionCommandResult.paste(text: "")) == .paste(text: ""))
+        // Only a completed result pastes.
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"keepOpen","message":"Hi","paste":"x"}"#)
+            == .keepOpen(message: "Hi"))
+        #expect(try decode(ExtensionActionResult.self, #"{"kind":"completed","paste":"x","reload":true}"#)
+            == ExtensionActionResult(.paste(text: "x"), reload: true))
+        // An unreadable paste leaves a plain completed, as an unreadable hud does.
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","paste":42}"#)
+            == .completed(message: nil, restoreFocus: false))
+    }
+
     /// What Prism read before `hud` existed.
     private struct OlderCommandResult: Decodable {
         let kind: String

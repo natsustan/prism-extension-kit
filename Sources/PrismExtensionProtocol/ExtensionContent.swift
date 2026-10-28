@@ -4,10 +4,12 @@ import Foundation
 /// host can map it without interpretation.
 ///
 /// Wire form: `{"kind": "completed" | "keepOpen" | "failed", "message": …,
-/// "restoreFocus": …, "hud": …}`; `message` is optional for `completed`,
-/// `restoreFocus` defaults to false, and `"hud": true` on a `completed` with a
-/// message is `hud`, which an older Prism reads as a plain `completed`. An
-/// empty HUD message closes the launcher without showing a HUD.
+/// "restoreFocus": …, "hud": …, "paste": …}`; `message` is optional for
+/// `completed`, `restoreFocus` defaults to false, and `"hud": true` on a
+/// `completed` with a message is `hud`, which an older Prism reads as a plain
+/// `completed`. An empty HUD message closes the launcher without showing a
+/// HUD. A `completed` with a `"paste"` string is `paste`, ahead of `hud`; an
+/// older Prism closes without pasting.
 public enum ExtensionCommandResult: Hashable, Codable, Sendable {
     /// Done: the launcher closes. `restoreFocus` returns to the summoning app.
     case completed(message: String?, restoreFocus: Bool)
@@ -18,9 +20,14 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
     /// briefly in a HUD, for a result worth confirming once the launcher is
     /// gone ("Copied #FF6363").
     case hud(message: String)
+    /// Done: the launcher closes and Prism pastes `text` into the app it was
+    /// opened over, or, from a hotkey with the launcher closed, the frontmost
+    /// app. The text stays on the clipboard. Without Accessibility access, or
+    /// when that app is gone, Prism only copies it and says so.
+    case paste(text: String)
 
     private enum CodingKeys: String, CodingKey {
-        case kind, message, restoreFocus, hud
+        case kind, message, restoreFocus, hud, paste
     }
 
     private enum Kind: String, Codable {
@@ -32,6 +39,11 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
         let message = try container.decodeIfPresent(String.self, forKey: .message)
         switch try container.decode(Kind.self, forKey: .kind) {
         case .completed:
+            // Like `hud`, an unreadable `paste` leaves a plain `completed`.
+            if let text = try? container.decodeIfPresent(String.self, forKey: .paste) {
+                self = .paste(text: text)
+                return
+            }
             // `hud` only dresses up a result: an unreadable value leaves a plain `completed`.
             if let message, (try? container.decodeIfPresent(Bool.self, forKey: .hud)) == true {
                 self = .hud(message: message)
@@ -66,6 +78,10 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
             try container.encode(message, forKey: .message)
             try container.encode(true, forKey: .restoreFocus)
             try container.encode(true, forKey: .hud)
+        case let .paste(text):
+            try container.encode(Kind.completed, forKey: .kind)
+            try container.encode(true, forKey: .restoreFocus)
+            try container.encode(text, forKey: .paste)
         }
     }
 }

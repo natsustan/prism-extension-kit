@@ -74,7 +74,7 @@ values the way Prism does when a preference changes.
 | --- | --- | --- |
 | Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory}` | `{"updatesPreferences": true}`, or `{}` |
 | Prism → extension | `preferences.update` `{preferences}` | none; only to an extension that replied `updatesPreferences` |
-| Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus", "hud"}` |
+| Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus", "hud", "paste"}` |
 | Prism → extension | `status.subscribe` `{commandID, session}` | `{}`, then `status.update` notifications |
 | Prism → extension | `status.unsubscribe` `{session}` | none |
 | Prism → extension | `widget.load` `{widgetID}` | the template's fields plus `"template"` |
@@ -145,6 +145,16 @@ HUD near the bottom of the screen, for a result worth confirming once the
 launcher is gone, such as “Copied #FF6363”. It works from root search, a
 hotkey, a widget, and a list action; an empty message closes without a HUD,
 and an older Prism closes without it.
+
+A `completed` result with a `"paste": "<text>"` string (`.paste(text:)` in
+Swift) closes the launcher and pastes the text into the app the launcher was
+opened over, or, from a hotkey or an interactive command with the launcher
+closed, into the frontmost app, as Clipboard History pastes. The text stays on
+the clipboard. Pasting needs Prism to have Accessibility access; without it,
+or when that app has gone, Prism copies the text and says so, so the text is
+never lost. `paste` wins over `hud`, and works from root search, a hotkey, a
+widget, and a list action. An older Prism closes without pasting, so an
+extension whose main job is pasting sets `minPrism`.
 
 A `list` command that searches an app can say which one with
 `"searchesApp": "<bundle id>"` (`"com.apple.Notes"`, matched ignoring case).
