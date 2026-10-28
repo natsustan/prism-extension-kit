@@ -163,7 +163,7 @@ public struct ExtensionListItem: Hashable, Codable, Sendable, Identifiable {
         keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
         section = try container.decodeIfPresent(String.self, forKey: .section)
         detail = try container.decodeIfPresent(ExtensionDetail.self, forKey: .detail)
-        actions = try container.decodeIfPresent([ExtensionAction].self, forKey: .actions) ?? []
+        actions = try container.decodeActions(forKey: .actions).readable
         isLoading = try container.decodeIfPresent(Bool.self, forKey: .isLoading) ?? false
     }
 
@@ -425,12 +425,16 @@ public struct ExtensionMetadataRow: Hashable, Codable, Sendable {
 /// "grantFolder", ...}`. `perform` (the default) sends `action.perform` to the
 /// extension; `copy`, `open`, and `grantFolder` are carried out by Prism
 /// without a round trip. An action with `"actions"` is a submenu instead.
+/// An item or submenu drops an action it can't read, such as a kind or URL
+/// this Prism doesn't know, and keeps the rest.
 public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
     public enum Kind: Hashable, Sendable {
         case perform
         /// Copies `text` to the clipboard and closes the launcher.
         case copy(text: String)
-        /// Opens an `http`, `https`, or `file` URL with its default app.
+        /// Opens a URL with the app that handles it: a web page, a file, or
+        /// another app's link (`cleanshot://capture-area`). Schemes that run
+        /// code in place of naming something (`blockedSchemes`) are refused.
         case open(url: URL)
         /// Asks the user to choose one of the manifest's `folders` in an open
         /// panel (`"folder": "<id>"`). When they do, Prism reloads the list.
@@ -453,12 +457,29 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
     /// The confirmation's explanation. Destructive actions always confirm;
     /// any other action with a message confirms too.
     public let confirmationMessage: String?
+    /// A `perform` or `open` action that works with the user outside
+    /// Prism, such as starting a screen capture: Prism closes the launcher
+    /// and returns focus before it runs, waits up to
+    /// `ExtensionCommand.interactiveTimeout` for `action.perform`, and shows
+    /// its message in a HUD. An older Prism runs it with the launcher open.
+    public let interactive: Bool
     /// A submenu: choosing this action shows these in the ⌘K panel instead
     /// of running it. One level deep; their IDs are unique across the item,
     /// and their shortcuts work from the list as well.
     public let actions: [ExtensionAction]
 
     public var isSubmenu: Bool { !actions.isEmpty }
+
+    /// URL schemes an `open` action never opens: they carry code or content
+    /// rather than naming something to open.
+    public static let blockedSchemes: Set<String> = ["javascript", "vbscript", "data", "blob"]
+
+    /// Whether an `open` action may open the URL: it names a scheme, and not
+    /// a blocked one.
+    public static func opens(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), !scheme.isEmpty else { return false }
+        return !blockedSchemes.contains(scheme)
+    }
 
     public init(
         id: String,
@@ -468,6 +489,7 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         style: Style = .regular,
         shortcut: ExtensionShortcut? = nil,
         confirmationMessage: String? = nil,
+        interactive: Bool = false,
         actions: [ExtensionAction] = []
     ) {
         self.id = id
@@ -477,18 +499,19 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         self.style = style
         self.shortcut = shortcut
         self.confirmationMessage = confirmationMessage
+        self.interactive = interactive
         self.actions = actions
     }
 
     func with(actions: [ExtensionAction]) -> ExtensionAction {
         ExtensionAction(
             id: id, title: title, symbol: symbol, kind: kind, style: style, shortcut: shortcut,
-            confirmationMessage: confirmationMessage, actions: actions
+            confirmationMessage: confirmationMessage, interactive: interactive, actions: actions
         )
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, symbol, kind, text, url, folder, style, shortcut, confirmationMessage, actions
+        case id, title, symbol, kind, text, url, folder, style, shortcut, confirmationMessage, interactive, actions
     }
 
     private enum KindName: String, Codable {
@@ -507,10 +530,9 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
             kind = .copy(text: try container.decode(String.self, forKey: .text))
         case .open:
             let string = try container.decode(String.self, forKey: .url)
-            guard let url = URL(string: string), let scheme = url.scheme?.lowercased(),
-                  ["http", "https", "file"].contains(scheme) else {
+            guard let url = URL(string: string), Self.opens(url) else {
                 throw DecodingError.dataCorruptedError(
-                    forKey: .url, in: container, debugDescription: "Only http, https, and file URLs open."
+                    forKey: .url, in: container, debugDescription: "This URL can't be opened from an action."
                 )
             }
             kind = .open(url: url)
@@ -522,7 +544,16 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         shortcut = (try? container.decodeIfPresent(String.self, forKey: .shortcut))
             .flatMap { $0.flatMap(ExtensionShortcut.init) }
         confirmationMessage = try container.decodeIfPresent(String.self, forKey: .confirmationMessage)
-        actions = try container.decodeIfPresent([ExtensionAction].self, forKey: .actions) ?? []
+        interactive = (try? container.decodeIfPresent(Bool.self, forKey: .interactive)) ?? false
+        let children = try container.decodeActions(forKey: .actions)
+        // A submenu left with nothing to show is unreadable itself, rather
+        // than a plain action that performs the submenu's ID.
+        guard children.offered == 0 || !children.readable.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .actions, in: container, debugDescription: "None of this submenu's actions can be read."
+            )
+        }
+        actions = children.readable
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -546,7 +577,27 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         try container.encode(style, forKey: .style)
         try container.encodeIfPresent(shortcut?.description, forKey: .shortcut)
         try container.encodeIfPresent(confirmationMessage, forKey: .confirmationMessage)
+        if interactive { try container.encode(true, forKey: .interactive) }
         if !actions.isEmpty { try container.encode(actions, forKey: .actions) }
+    }
+}
+
+private extension KeyedDecodingContainer {
+    /// The actions this Prism can read, out of how many were offered; the
+    /// others are dropped, so one action from a newer Kit never costs the
+    /// user the whole list.
+    func decodeActions(forKey key: Key) throws -> (readable: [ExtensionAction], offered: Int) {
+        let offered = try decodeIfPresent([Readable<ExtensionAction>].self, forKey: key) ?? []
+        return (offered.compactMap(\.value), offered.count)
+    }
+}
+
+/// A value decoded if it can be, and nil if not, so an array keeps going.
+private struct Readable<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: any Decoder) throws {
+        value = try? Value(from: decoder)
     }
 }
 

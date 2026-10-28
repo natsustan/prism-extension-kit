@@ -109,8 +109,10 @@ struct ExtensionListTests {
 
     @Test("actions reject unsafe URLs and drop unusable shortcuts")
     func actionValidation() throws {
-        #expect(throws: DecodingError.self) {
-            try decode(ExtensionAction.self, #"{"id":"x","title":"X","kind":"open","url":"javascript:alert(1)"}"#)
+        for url in ["javascript:alert(1)", "JavaScript:alert(1)", "data:text/html,<b>x</b>", "no scheme"] {
+            #expect(throws: DecodingError.self) {
+                try decode(ExtensionAction.self, #"{"id":"x","title":"X","kind":"open","url":"\#(url)"}"#)
+            }
         }
         #expect(throws: DecodingError.self) {
             try decode(ExtensionAction.self, #"{"id":"x","title":"X","kind":"copy"}"#)
@@ -128,6 +130,52 @@ struct ExtensionListTests {
         #expect(ExtensionShortcut("cmd+cmd+c") == nil)
         #expect(ExtensionShortcut("cmd+é") == nil)
         #expect(ExtensionShortcut("cmd+f13") == nil)
+    }
+
+    @Test("open actions take another app's links as well as web pages and files")
+    func appLinks() throws {
+        for url in ["https://example.com", "file:///tmp/a.png", "cleanshot://capture-area?action=copy", "things:///show?id=today"] {
+            let action = try decode(ExtensionAction.self, #"{"id":"x","title":"X","kind":"open","url":"\#(url)"}"#)
+            #expect(action.kind == .open(url: URL(string: url)!))
+            #expect(try ExtensionWire.roundTrip(action) == action)
+        }
+    }
+
+    @Test("an item drops the actions it can't read and keeps the rest, in submenus too")
+    func unreadableActions() throws {
+        let item = try decode(ExtensionListItem.self, #"""
+        {"id":"a","title":"A","actions":[
+          {"id":"run","title":"Run","kind":"launchRocket"},
+          {"id":"open","title":"Open","kind":"open","url":"javascript:alert(1)"},
+          {"id":"copy","title":"Copy","kind":"copy","text":"A"},
+          {"id":"more","title":"More","actions":[
+            {"id":"bad","title":"Bad","kind":"copy"},
+            {"id":"site","title":"Site","kind":"open","url":"https://example.com"}]},
+          {"id":"future","title":"Future","actions":[
+            {"id":"warp","title":"Warp","kind":"warp"}]},
+          {"id":"leaf","title":"Leaf","actions":[]},
+          "not an action"]}
+        """#)
+        // A submenu with nothing readable goes too, rather than performing
+        // its own ID; an empty list of actions was never a submenu.
+        #expect(item.actions.map(\.id) == ["copy", "more", "leaf"])
+        #expect(item.actions[1].actions.map(\.id) == ["site"])
+        #expect(!item.actions[2].isSubmenu && item.actions[2].kind == .perform)
+    }
+
+    @Test("an interactive action round-trips, and a plain one leaves the field out")
+    func interactiveActions() throws {
+        let capture = try decode(
+            ExtensionAction.self, #"{"id":"capture","title":"Capture","kind":"open","url":"cleanshot://capture-area","interactive":true}"#
+        )
+        #expect(capture.interactive)
+        #expect(try ExtensionWire.roundTrip(capture) == capture)
+        #expect(try !decode(ExtensionAction.self, #"{"id":"x","title":"X","interactive":"yes"}"#).interactive)
+        let plain = try ExtensionWire.encode(ExtensionAction(id: "x", title: "X"))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("interactive"))
+        let submenu = ExtensionAction(id: "menu", title: "Menu", interactive: true, actions: [ExtensionAction(id: "a", title: "A")])
+        #expect(ExtensionList(items: [ExtensionListItem(id: "1", title: "One", actions: [submenu])])
+            .normalized().items[0].actions[0].interactive)
     }
 
     @Test("normalizing keeps the first of repeated IDs and caps the item count")
