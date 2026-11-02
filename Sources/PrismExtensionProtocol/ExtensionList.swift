@@ -421,9 +421,9 @@ public struct ExtensionMetadataRow: Hashable, Codable, Sendable {
 
 /// Something the user can do with an item.
 ///
-/// Wire form: `{"id", "title", "kind": "perform" | "copy" | "open" |
+/// Wire form: `{"id", "title", "kind": "perform" | "copy" | "paste" | "open" |
 /// "grantFolder", ...}`. `perform` (the default) sends `action.perform` to the
-/// extension; `copy`, `open`, and `grantFolder` are carried out by Prism
+/// extension; `copy`, `paste`, `open`, and `grantFolder` are carried out by Prism
 /// without a round trip. An action with `"actions"` is a submenu instead.
 /// An item or submenu drops an action it can't read, such as a kind or URL
 /// this Prism doesn't know, and keeps the rest.
@@ -432,6 +432,11 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
         case perform
         /// Copies `text` to the clipboard and closes the launcher.
         case copy(text: String)
+        /// Pastes `text` into the app the launcher was opened over, as a
+        /// `paste` command result does: the launcher closes, the text stays
+        /// on the clipboard, and without Accessibility access Prism only
+        /// copies it and says so.
+        case paste(text: String)
         /// Opens a URL with the app that handles it: a web page, a file, or
         /// another app's link (`cleanshot://capture-area`). Schemes that run
         /// code in place of naming something (`blockedSchemes`) are refused.
@@ -515,7 +520,7 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
     }
 
     private enum KindName: String, Codable {
-        case perform, copy, open, grantFolder
+        case perform, copy, paste, open, grantFolder
     }
 
     public init(from decoder: any Decoder) throws {
@@ -528,6 +533,8 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
             kind = .perform
         case .copy:
             kind = .copy(text: try container.decode(String.self, forKey: .text))
+        case .paste:
+            kind = .paste(text: try container.decode(String.self, forKey: .text))
         case .open:
             let string = try container.decode(String.self, forKey: .url)
             guard let url = URL(string: string), Self.opens(url) else {
@@ -566,6 +573,9 @@ public struct ExtensionAction: Hashable, Codable, Sendable, Identifiable {
             try container.encode(KindName.perform, forKey: .kind)
         case let .copy(text):
             try container.encode(KindName.copy, forKey: .kind)
+            try container.encode(text, forKey: .text)
+        case let .paste(text):
+            try container.encode(KindName.paste, forKey: .kind)
             try container.encode(text, forKey: .text)
         case let .open(url):
             try container.encode(KindName.open, forKey: .kind)

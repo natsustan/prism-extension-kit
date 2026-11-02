@@ -92,10 +92,14 @@ values the way Prism does when a preference changes.
 A list item is `{"id", "title", "subtitle", "icon", "accessories", "keywords",
 "section", "detail", "actions"}`; only `id` and `title` are required, and IDs
 must stay the same across reloads. An action is `{"id", "title", "symbol",
-"kind": "perform" | "copy" | "open" | "grantFolder", "text" | "url" | "folder",
+"kind": "perform" | "copy" | "paste" | "open" | "grantFolder", "text" | "url" | "folder",
 "style": "destructive", "shortcut": "cmd+shift+c", "confirmationMessage",
 "interactive"}`; destructive actions, and any action with a
 `confirmationMessage`, ask before they run. The first action runs on Return.
+A `paste` action pastes its `text` into the app the launcher was opened over,
+as a `paste` command result does (below), without a round trip. When there is
+no such app, Prism leaves it out and Return runs the item's next action, and
+an older Prism drops it the same way, so offer a `copy` action after it.
 An `open` action opens its `url` with the app that handles it: a web page, a
 file, or another app's link such as `cleanshot://capture-area` (Prism says
 so when no app on the Mac opens it); `javascript:`, `vbscript:`, `data:`, and

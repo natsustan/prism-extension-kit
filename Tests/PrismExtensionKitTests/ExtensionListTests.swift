@@ -132,6 +132,18 @@ struct ExtensionListTests {
         #expect(ExtensionShortcut("cmd+f13") == nil)
     }
 
+    @Test("a paste action carries its text, and one without text can't be read")
+    func pasteActions() throws {
+        let paste = try decode(ExtensionAction.self, #"{"id":"paste","title":"Paste","kind":"paste","text":"一百二十三"}"#)
+        #expect(paste.kind == .paste(text: "一百二十三"))
+        #expect(try ExtensionWire.roundTrip(paste) == paste)
+        let wire = String(decoding: try ExtensionWire.encode(paste), as: UTF8.self)
+        #expect(wire.contains(#""kind":"paste""#) && wire.contains(#""text":"一百二十三""#))
+        #expect(throws: DecodingError.self) {
+            try decode(ExtensionAction.self, #"{"id":"x","title":"X","kind":"paste"}"#)
+        }
+    }
+
     @Test("open actions take another app's links as well as web pages and files")
     func appLinks() throws {
         for url in ["https://example.com", "file:///tmp/a.png", "cleanshot://capture-area?action=copy", "things:///show?id=today"] {
