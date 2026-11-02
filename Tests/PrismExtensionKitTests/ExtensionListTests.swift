@@ -300,6 +300,42 @@ struct ExtensionListTests {
             == .completed(message: nil, restoreFocus: false))
     }
 
+    @Test("a copy result travels as a completed one without a HUD, so an older Prism closes quietly")
+    func copyResults() throws {
+        let copy = ExtensionCommandResult.copy(text: "hunter2", message: "Copied Password", concealed: true)
+        #expect(try ExtensionWire.roundTrip(copy) == copy)
+        let older = try JSONDecoder().decode(OlderCommandResult.self, from: ExtensionWire.encode(copy))
+        #expect(older.kind == "completed" && older.restoreFocus)
+        let wire = try JSONSerialization.jsonObject(with: ExtensionWire.encode(copy)) as? [String: Any]
+        #expect(wire?["hud"] == nil)
+
+        #expect(try ExtensionWire.roundTrip(ExtensionCommandResult.copy(text: "x")) == .copy(text: "x"))
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","copy":"x"}"#)
+            == .copy(text: "x", message: nil, concealed: false))
+        // Paste wins over copy, and copy over a HUD.
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","copy":"x","paste":"y"}"#)
+            == .paste(text: "y"))
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","message":"Hi","hud":true,"copy":"x"}"#)
+            == .copy(text: "x", message: "Hi"))
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"failed","message":"No","copy":"x"}"#)
+            == .failed(message: "No"))
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","copy":42}"#)
+            == .completed(message: nil, restoreFocus: false))
+    }
+
+    @Test("concealed marks pasted or copied text as a secret, and an unreadable flag leaves it plain")
+    func concealedResults() throws {
+        let paste = ExtensionCommandResult.paste(text: "hunter2", concealed: true)
+        #expect(try ExtensionWire.roundTrip(paste) == paste)
+        #expect(try decode(ExtensionCommandResult.self, #"{"kind":"completed","paste":"x","concealed":"yes"}"#)
+            == .paste(text: "x"))
+        // Plain text leaves the flag off the wire, as before.
+        let plain = try JSONSerialization.jsonObject(with: ExtensionWire.encode(ExtensionCommandResult.paste(text: "x"))) as? [String: Any]
+        #expect(plain?["concealed"] == nil)
+        #expect(try decode(ExtensionActionResult.self, #"{"kind":"completed","copy":"x","concealed":true,"reload":true}"#)
+            == ExtensionActionResult(.copy(text: "x", concealed: true), reload: true))
+    }
+
     /// What Prism read before `hud` existed.
     private struct OlderCommandResult: Decodable {
         let kind: String

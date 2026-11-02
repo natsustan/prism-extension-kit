@@ -74,7 +74,7 @@ values the way Prism does when a preference changes.
 | --- | --- | --- |
 | Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory}` | `{"updatesPreferences": true}`, or `{}` |
 | Prism → extension | `preferences.update` `{preferences}` | none; only to an extension that replied `updatesPreferences` |
-| Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus", "hud", "paste"}` |
+| Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus", "hud", "paste", "copy", "concealed"}` |
 | Prism → extension | `status.subscribe` `{commandID, session}` | `{}`, then `status.update` notifications |
 | Prism → extension | `status.unsubscribe` `{session}` | none |
 | Prism → extension | `widget.load` `{widgetID}` | the template's fields plus `"template"` |
@@ -166,6 +166,23 @@ or when that app has gone, Prism copies the text and says so, so the text is
 never lost. `paste` wins over `hud`, and works from root search, a hotkey, a
 widget, and a list action. An older Prism closes without pasting, so an
 extension whose main job is pasting sets `minPrism`.
+
+A `completed` result with a `"copy": "<text>"` string
+(`.copy(text:message:)` in Swift) closes the launcher, returns focus, copies
+the text, and confirms with its `message` in a HUD, or "Copied" without one;
+an empty message copies without a HUD. It is for text the extension works out
+when the action runs, such as a value fetched on demand; text already known
+when the list loads belongs in a `copy` action. `paste` wins over `copy`, and
+`copy` over `hud`. An older Prism closes without copying, and without a HUD.
+
+`"concealed": true` on a `paste` or `copy` result (`concealed: true` in Swift)
+marks the text as a secret, such as a password or a one-time code: Prism marks
+the clipboard item concealed so clipboard managers, its own history included,
+skip it, keeps it off Universal Clipboard, and clears it after 90 seconds
+unless something else was copied since. Fetch the secret in the action, never
+put it in a list item, so it is read only when the user asks for it. An older
+Prism pastes concealed text as plain text, so an extension that hands out
+secrets sets `minPrism`.
 
 A `list` command that searches an app can say which one with
 `"searchesApp": "<bundle id>"` (`"com.apple.Notes"`, matched ignoring case).

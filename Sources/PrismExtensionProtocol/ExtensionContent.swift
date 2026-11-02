@@ -4,12 +4,15 @@ import Foundation
 /// host can map it without interpretation.
 ///
 /// Wire form: `{"kind": "completed" | "keepOpen" | "failed", "message": …,
-/// "restoreFocus": …, "hud": …, "paste": …}`; `message` is optional for
-/// `completed`, `restoreFocus` defaults to false, and `"hud": true` on a
-/// `completed` with a message is `hud`, which an older Prism reads as a plain
-/// `completed`. An empty HUD message closes the launcher without showing a
-/// HUD. A `completed` with a `"paste"` string is `paste`, ahead of `hud`; an
-/// older Prism closes without pasting.
+/// "restoreFocus": …, "hud": …, "paste": …, "copy": …, "concealed": …}`;
+/// `message` is optional for `completed`, `restoreFocus` defaults to false,
+/// and `"hud": true` on a `completed` with a message is `hud`, which an older
+/// Prism reads as a plain `completed`. An empty HUD message closes the
+/// launcher without showing a HUD. A `completed` with a `"paste"` string is
+/// `paste`, ahead of `copy` and `hud`; one with a `"copy"` string is `copy`,
+/// ahead of `hud`. An older Prism closes without pasting or copying.
+/// `"concealed": true` on either marks the text as a secret; an older Prism
+/// that pastes ignores it.
 public enum ExtensionCommandResult: Hashable, Codable, Sendable {
     /// Done: the launcher closes. `restoreFocus` returns to the summoning app.
     case completed(message: String?, restoreFocus: Bool)
@@ -23,11 +26,19 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
     /// Done: the launcher closes and Prism pastes `text` into the app it was
     /// opened over, or, from a hotkey with the launcher closed, the frontmost
     /// app. The text stays on the clipboard. Without Accessibility access, or
-    /// when that app is gone, Prism only copies it and says so.
-    case paste(text: String)
+    /// when that app is gone, Prism only copies it and says so. `concealed`
+    /// text is kept as `copy` describes.
+    case paste(text: String, concealed: Bool = false)
+    /// Done: the launcher closes, focus returns, Prism copies `text`, and
+    /// confirms with `message` in a HUD ("Copied Password"), or "Copied"
+    /// without one; an empty message shows no HUD. `concealed` text, such as
+    /// a password, is marked so clipboard managers skip it, stays off
+    /// Universal Clipboard, and is cleared after 90 seconds unless something
+    /// else was copied since.
+    case copy(text: String, message: String? = nil, concealed: Bool = false)
 
     private enum CodingKeys: String, CodingKey {
-        case kind, message, restoreFocus, hud, paste
+        case kind, message, restoreFocus, hud, paste, copy, concealed
     }
 
     private enum Kind: String, Codable {
@@ -39,9 +50,14 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
         let message = try container.decodeIfPresent(String.self, forKey: .message)
         switch try container.decode(Kind.self, forKey: .kind) {
         case .completed:
-            // Like `hud`, an unreadable `paste` leaves a plain `completed`.
+            // Like `hud`, an unreadable `paste` or `copy` leaves a plain `completed`.
+            let concealed = (try? container.decodeIfPresent(Bool.self, forKey: .concealed)) == true
             if let text = try? container.decodeIfPresent(String.self, forKey: .paste) {
-                self = .paste(text: text)
+                self = .paste(text: text, concealed: concealed)
+                return
+            }
+            if let text = try? container.decodeIfPresent(String.self, forKey: .copy) {
+                self = .copy(text: text, message: message, concealed: concealed)
                 return
             }
             // `hud` only dresses up a result: an unreadable value leaves a plain `completed`.
@@ -78,10 +94,19 @@ public enum ExtensionCommandResult: Hashable, Codable, Sendable {
             try container.encode(message, forKey: .message)
             try container.encode(true, forKey: .restoreFocus)
             try container.encode(true, forKey: .hud)
-        case let .paste(text):
+        case let .paste(text, concealed):
             try container.encode(Kind.completed, forKey: .kind)
             try container.encode(true, forKey: .restoreFocus)
             try container.encode(text, forKey: .paste)
+            if concealed { try container.encode(true, forKey: .concealed) }
+        case let .copy(text, message, concealed):
+            // No `hud`: an older Prism, which cannot copy, closes quietly
+            // rather than confirming a copy it never made.
+            try container.encode(Kind.completed, forKey: .kind)
+            try container.encodeIfPresent(message, forKey: .message)
+            try container.encode(true, forKey: .restoreFocus)
+            try container.encode(text, forKey: .copy)
+            if concealed { try container.encode(true, forKey: .concealed) }
         }
     }
 }
