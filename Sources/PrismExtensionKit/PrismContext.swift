@@ -12,9 +12,17 @@ public struct PrismContext: Sendable {
     /// process. Prism creates it and deletes it on uninstall; `nil` under a
     /// Prism that predates it.
     public let dataDirectory: URL?
+    /// Prism's interface language (`en`, `zh-Hans`, `zh-Hant`), or nil under
+    /// a Prism that predates it. Look strings up with
+    /// `.module.prismLocalized`; see `PrismLocalization`.
+    public let language: String?
 
     let requestID: Int?
     let runtime: ExtensionRuntime
+
+    /// Prism's language with the user's region, for formatting numbers and
+    /// dates next to translated text.
+    public var locale: Locale { PrismLocalization.locale(for: language) }
 
     /// A saved state value, as last written by `setState`.
     public func state(_ key: String) async -> ExtensionValue? {

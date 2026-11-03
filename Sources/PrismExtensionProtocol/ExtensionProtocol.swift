@@ -146,6 +146,11 @@ public struct ExtensionInitializeParams: Hashable, Codable, Sendable {
     /// `state`. Prism keeps one per extension and build, and deletes it on
     /// uninstall. Absent from older Prism versions.
     public let dataDirectory: String?
+    /// Prism's interface language, such as `en`, `zh-Hans`, or `zh-Hant`:
+    /// the language to write list, status, widget, and message text in.
+    /// Absent from older Prism versions. Prism changes language only on
+    /// relaunch, which restarts the extension.
+    public let language: String?
 
     public init(
         protocolVersion: Int = ExtensionManifest.supportedProtocolVersion,
@@ -153,7 +158,8 @@ public struct ExtensionInitializeParams: Hashable, Codable, Sendable {
         extensionID: ExtensionID,
         preferences: [String: ExtensionValue],
         state: [String: ExtensionValue],
-        dataDirectory: String? = nil
+        dataDirectory: String? = nil,
+        language: String? = nil
     ) {
         self.protocolVersion = protocolVersion
         self.prismVersion = prismVersion
@@ -161,11 +167,12 @@ public struct ExtensionInitializeParams: Hashable, Codable, Sendable {
         self.preferences = preferences
         self.state = state
         self.dataDirectory = dataDirectory
+        self.language = language
     }
 
     private enum CodingKeys: String, CodingKey {
         case protocolVersion = "protocol"
-        case prismVersion, extensionID, preferences, state, dataDirectory
+        case prismVersion, extensionID, preferences, state, dataDirectory, language
     }
 }
 

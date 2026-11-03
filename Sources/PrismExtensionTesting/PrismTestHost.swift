@@ -28,6 +28,9 @@ public actor PrismTestHost {
     public let extensionID: ExtensionID
     /// The folder handed over as the extension's data directory.
     public let dataDirectory: URL?
+    /// Prism's interface language as `initialize` sends it; nil plays a
+    /// Prism that predates it.
+    public let language: String?
     /// Preferences as `initialize` or the last `preferences.update` sent them.
     public private(set) var preferences: [String: ExtensionValue]
     /// What Prism would keep for the extension (`state.write`).
@@ -52,11 +55,13 @@ public actor PrismTestHost {
         extensionID: ExtensionID = "octocat.test",
         preferences: [String: ExtensionValue] = [:],
         state: [String: ExtensionValue] = [:],
-        dataDirectory: URL? = nil
+        dataDirectory: URL? = nil,
+        language: String? = "en"
     ) async throws {
         self.extensionValue = extensionValue
         self.extensionID = extensionID
         self.dataDirectory = dataDirectory
+        self.language = language
         self.preferences = preferences
         self.state = state
         (runtime, lines) = Self.makeRuntime(extensionValue)
@@ -93,7 +98,7 @@ public actor PrismTestHost {
     private func initialize() async throws {
         _ = try await request(ExtensionMethod.initialize, ExtensionInitializeParams(
             prismVersion: "test", extensionID: extensionID, preferences: preferences, state: state,
-            dataDirectory: dataDirectory?.path
+            dataDirectory: dataDirectory?.path, language: language
         ))
     }
 

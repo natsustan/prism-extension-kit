@@ -449,6 +449,10 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
     /// Folders the extension may ask the user to let it read.
     public let folders: [ExtensionFolderGrant]
     public let capabilities: [ExtensionCapability]
+    /// Translations of the display text, keyed by language (`zh-Hans`).
+    /// Show text through `displayText(for:)`; the fields above stay the
+    /// untranslated identity.
+    public let localizations: [String: ExtensionManifestLocalization]
 
     public init(
         protocolVersion: Int = ExtensionManifest.supportedProtocolVersion,
@@ -465,7 +469,8 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
         widgets: [ExtensionWidget] = [],
         tasks: [ExtensionTask] = [],
         folders: [ExtensionFolderGrant] = [],
-        capabilities: [ExtensionCapability] = []
+        capabilities: [ExtensionCapability] = [],
+        localizations: [String: ExtensionManifestLocalization] = [:]
     ) {
         self.protocolVersion = protocolVersion
         self.id = id
@@ -482,6 +487,7 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
         self.tasks = tasks
         self.folders = folders
         self.capabilities = capabilities
+        self.localizations = localizations
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -489,6 +495,7 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
         case id, name, version, author
         case summary = "description"
         case minPrism, icon, executable, commands, preferences, widgets, tasks, folders, capabilities
+        case localizations
     }
 
     public init(from decoder: any Decoder) throws {
@@ -509,6 +516,31 @@ public struct ExtensionManifest: Hashable, Codable, Sendable, Identifiable {
         tasks = try container.decodeIfPresent([ExtensionTask].self, forKey: .tasks) ?? []
         folders = try container.decodeIfPresent([ExtensionFolderGrant].self, forKey: .folders) ?? []
         capabilities = try container.decodeIfPresent([ExtensionCapability].self, forKey: .capabilities) ?? []
+        // Translations Prism cannot read show the untranslated text; they
+        // never make the extension fail to load.
+        localizations = ((try? container.decodeIfPresent(
+            [String: LenientValue<ExtensionManifestLocalization>].self, forKey: .localizations
+        )) ?? [:]).compactMapValues(\.value)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(protocolVersion, forKey: .protocolVersion)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(version, forKey: .version)
+        try container.encode(author, forKey: .author)
+        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encodeIfPresent(minPrism, forKey: .minPrism)
+        try container.encode(icon, forKey: .icon)
+        try container.encodeIfPresent(executable, forKey: .executable)
+        try container.encode(commands, forKey: .commands)
+        try container.encode(preferences, forKey: .preferences)
+        try container.encode(widgets, forKey: .widgets)
+        try container.encode(tasks, forKey: .tasks)
+        try container.encode(folders, forKey: .folders)
+        try container.encode(capabilities, forKey: .capabilities)
+        if !localizations.isEmpty { try container.encode(localizations, forKey: .localizations) }
     }
 
     public func command(id: String) -> ExtensionCommand? {

@@ -16,6 +16,9 @@ public actor ExtensionRuntime {
     private var prismVersion = ""
     private var preferences = Preferences([:])
     private var dataDirectory: URL?
+    /// Prism's interface language from `initialize`; before it, or under an
+    /// older Prism, what `PRISM_LANGUAGE` says.
+    private var language = PrismLocalization.environmentLanguage
     private var requests: [Int: Task<Void, Never>] = [:]
     /// Requests Prism canceled. They may still be running, but Prism no
     /// longer accepts their writes.
@@ -137,6 +140,7 @@ public actor ExtensionRuntime {
                 state = initialize.state
                 stateQuota = ExtensionStateQuota(initialize.state)
                 dataDirectory = initialize.dataDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
+                if let language = initialize.language, !language.isEmpty { self.language = language }
                 reply(id, encoding: ExtensionInitializeResult(updatesPreferences: true))
             } catch {
                 reply(id, error: "Invalid initialize parameters.")
@@ -271,8 +275,12 @@ public actor ExtensionRuntime {
         _ work: @escaping @Sendable (ExtensionRuntime, PrismContext) async -> Void
     ) {
         let context = makeContext(requestID: id)
+        let language = language
         requests[id] = Task {
-            await work(self, context)
+            // Everything the request calls, however deep, sees Prism's language.
+            await PrismLocalization.$language.withValue(language) {
+                await work(self, context)
+            }
             self.requestFinished(id)
         }
     }
@@ -285,7 +293,7 @@ public actor ExtensionRuntime {
     private func makeContext(requestID: Int?) -> PrismContext {
         PrismContext(
             extensionID: extensionID, prismVersion: prismVersion, preferences: preferences,
-            dataDirectory: dataDirectory, requestID: requestID, runtime: self
+            dataDirectory: dataDirectory, language: language, requestID: requestID, runtime: self
         )
     }
 
@@ -314,8 +322,12 @@ public actor ExtensionRuntime {
         let read = statusReadCount
         statusReads[session] = read
         let status: ExtensionRowStatus?
+        let context = makeContext(requestID: nil)
         do {
-            status = try await extensionValue.status(for: command, context: makeContext(requestID: nil))
+            // Refresh loops run outside any request, so set the language here too.
+            status = try await PrismLocalization.$language.withValue(language) {
+                try await extensionValue.status(for: command, context: context)
+            }
         } catch {
             status = ExtensionRowStatus(
                 text: "Error", symbol: "exclamationmark.triangle.fill", tone: .critical,

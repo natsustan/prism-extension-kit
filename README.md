@@ -66,13 +66,65 @@ import Testing
 `PrismTestHost` sends the same messages Prism does through the same runtime,
 and records what the extension asked of Prism: `state`, `startedTasks`,
 `changedLists`, and `logs`. `setPreferences` hands the running extension new
-values the way Prism does when a preference changes.
+values the way Prism does when a preference changes. It plays an English
+Prism unless you pass `language:` (below).
+
+## Languages
+
+Prism runs in English, Simplified Chinese (`zh-Hans`), or Traditional Chinese
+(`zh-Hant`), which may differ from the macOS language. Translations are
+optional; whatever is missing shows as written. A language never borrows
+another script: Traditional Chinese without its own text shows the
+untranslated text, not Simplified.
+
+**Manifest text.** Prism shows the manifest itself (root search, settings,
+widgets, the Gallery), so translations go in `manifest.json`, keyed by ID:
+
+```json
+"localizations": {
+  "zh-Hans": {
+    "name": "咖啡因",
+    "description": "让 Mac 保持唤醒。",
+    "commands": { "caffeinate": { "title": "保持唤醒", "subtitle": "咖啡", "keywords": ["防止睡眠"] } },
+    "preferences": { "preventDiskSleep": { "title": "防止磁盘睡眠", "caption": "…" } },
+    "sections": { "Power": "电源" },
+    "widgets": { "toggle": { "title": "咖啡因", "subtitle": "让 Mac 保持唤醒" } },
+    "folders": { "notes": { "reason": "读取备忘录资料库。" } }
+  }
+}
+```
+
+`sections` is keyed by the untranslated heading. Translated `keywords` are
+searched in addition to the command's own, and the untranslated title stays
+searchable, so either language finds the command. IDs, aliases, and settings
+links do not change. Prism ignores a translation it cannot read; an older
+Prism ignores the whole field. `prism-extension lint` reports mistakes.
+
+**Runtime text.** Lists, statuses, widgets, and messages come from the
+extension, so it writes them in Prism's language: `initialize` carries
+`language` (absent from an older Prism), and the process environment
+carries `PRISM_LANGUAGE`, for extensions that do not read `initialize`. In
+Swift, add a `Localizable.xcstrings` to the target's resources, set
+`defaultLocalization: "en"` on the package, and look strings up through
+`prismLocalized`:
+
+```swift
+String(localized: "Copied \(name)", bundle: .module.prismLocalized)
+```
+
+Plain `.module` follows the macOS language, not Prism's. `prismLocalized`
+picks the `.lproj` for `PrismLocalization.language`, which is set for
+everything a request calls, and falls back to the text in code.
+`context.locale` (or `PrismLocalization.locale`) formats numbers and dates
+in Prism's language with the user's region. In tests, pass
+`PrismTestHost(…, language: "zh-Hans")`. `prism-extension pack` ships the
+resource bundle beside the executable, where `Bundle.module` finds it.
 
 ## Protocol v1
 
 | Direction | Method | Reply |
 | --- | --- | --- |
-| Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory}` | `{"updatesPreferences": true}`, or `{}` |
+| Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory, language}` | `{"updatesPreferences": true}`, or `{}` |
 | Prism → extension | `preferences.update` `{preferences}` | none; only to an extension that replied `updatesPreferences` |
 | Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus", "hud", "paste", "copy", "concealed"}` |
 | Prism → extension | `status.subscribe` `{commandID, session}` | `{}`, then `status.update` notifications |
