@@ -44,8 +44,12 @@ public enum PrismLocalization {
 
     public static func locale(for language: String?) -> Locale {
         guard let language else { return .current }
-        var components = Locale.Components(locale: .current)
+        let current = Locale.current
+        var components = Locale.Components(locale: current)
         components.languageComponents = Locale.Language.Components(identifier: language)
+        // Splitting off the language drops the region on some Foundation
+        // versions; keep the user's formatting region either way.
+        if components.region == nil { components.region = current.region }
         return Locale(components: components)
     }
 
