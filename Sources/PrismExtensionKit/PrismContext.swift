@@ -52,6 +52,15 @@ public struct PrismContext: Sendable {
         await runtime.listChanged(command)
     }
 
+    /// Tells Prism that widgets' data changed (`widget.changed`): the
+    /// widgets named, or every widget of the extension when `widgets` is
+    /// nil. Prism reloads the ones on screen. Set
+    /// `PrismExtension.notifiesWidgetChanges` so Prism stops polling them
+    /// every few seconds.
+    public func widgetChanged(_ widgets: [String]? = nil) async {
+        await runtime.widgetChanged(widgets)
+    }
+
     /// Writes a line to Prism's log for this extension.
     public func log(_ message: String) async {
         await runtime.log(message)

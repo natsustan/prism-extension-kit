@@ -43,8 +43,31 @@ private struct TallyExtension: PrismExtension {
     }
 }
 
+/// A widget whose data lands after the load that asked for it.
+private struct NotifyingExtension: PrismExtension {
+    var notifiesWidgetChanges: Bool { true }
+
+    func run(command: String, context: PrismContext) async throws -> ExtensionCommandResult {
+        await context.widgetChanged(["ring"])
+        await context.widgetChanged()
+        return .done
+    }
+}
+
 @Suite("Prism test host")
 struct PrismTestHostTests {
+    @Test("an extension that notifies widget changes says so and the host records each notification")
+    func widgetChanges() async throws {
+        let prism = try await PrismTestHost(NotifyingExtension())
+        #expect(await prism.initializeResult.notifiesWidgetChanges == true)
+        _ = try await prism.run("refresh")
+        #expect(await prism.changedWidgets == [["ring"], nil])
+
+        let quiet = try await PrismTestHost(TallyExtension())
+        #expect(await quiet.initializeResult.notifiesWidgetChanges == nil)
+        #expect(await quiet.initializeResult.updatesPreferences == true)
+    }
+
     @Test("commands, lists, actions, status, and widgets round-trip, and the host keeps what the extension asked for")
     func roundTrips() async throws {
         let prism = try await PrismTestHost(TallyExtension(), state: ["count": .number(1)])

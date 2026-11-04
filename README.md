@@ -124,7 +124,7 @@ resource bundle beside the executable, where `Bundle.module` finds it.
 
 | Direction | Method | Reply |
 | --- | --- | --- |
-| Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory, language}` | `{"updatesPreferences": true}`, or `{}` |
+| Prism → extension | `initialize` `{protocol, prismVersion, extensionID, preferences, state, dataDirectory, language}` | `{"updatesPreferences": true, "notifiesWidgetChanges": true}`, either optional |
 | Prism → extension | `preferences.update` `{preferences}` | none; only to an extension that replied `updatesPreferences` |
 | Prism → extension | `command.run` `{commandID}` | `{"kind": "completed" \| "keepOpen" \| "failed", "message", "restoreFocus", "hud", "paste", "copy", "concealed"}` |
 | Prism → extension | `status.subscribe` `{commandID, session}` | `{}`, then `status.update` notifications |
@@ -139,6 +139,7 @@ resource bundle beside the executable, where `Bundle.module` finds it.
 | Extension → Prism | `state.write` `{requestID, key, value}` | none; only while that request is in flight, within 1 MB per extension |
 | Extension → Prism | `task.start` `{requestID, taskID, arguments}` | none; only tasks the manifest declares |
 | Extension → Prism | `list.changed` `{commandID}` | none; an open list of that command reloads |
+| Extension → Prism | `widget.changed` `{widgetIDs}` | none; those widgets reload if on screen (all of the extension's when `widgetIDs` is absent) |
 | Extension → Prism | `log` `{message}` | none |
 
 A list item is `{"id", "title", "subtitle", "icon", "accessories", "keywords",
@@ -279,7 +280,15 @@ the surrounding color. Tints are `blue`, `teal`, `cyan`, `green`, `gold`,
 (near-black, for brand marks).
 
 Prism starts the extension on demand and ends it after a minute idle or when
-its process tree uses more than 150 MB. When a preference changes, Prism sends
+its process tree uses more than 150 MB. While a widget is on screen Prism
+reloads it every 5 seconds, and at once after a command or action. An
+extension whose data changes in the background (a refresh started by a load
+that finishes later) sends `widget.changed` when it lands and replies
+`notifiesWidgetChanges` to `initialize`; Prism then reloads its widgets on
+that notification and polls them only once a minute, for relative times. In
+Swift, set `notifiesWidgetChanges` to `true` and call `context.widgetChanged()`.
+Prism coalesces bursts: a widget already loading reloads once more after it
+finishes. When a preference changes, Prism sends
 the running extension `preferences.update` with every value, then reloads its
 open lists and visible widgets; the Swift runtime replies `updatesPreferences`
 and hands later requests the new values in `context.preferences`, so read

@@ -141,7 +141,10 @@ public actor ExtensionRuntime {
                 stateQuota = ExtensionStateQuota(initialize.state)
                 dataDirectory = initialize.dataDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
                 if let language = initialize.language, !language.isEmpty { self.language = language }
-                reply(id, encoding: ExtensionInitializeResult(updatesPreferences: true))
+                reply(id, encoding: ExtensionInitializeResult(
+                    updatesPreferences: true,
+                    notifiesWidgetChanges: extensionValue.notifiesWidgetChanges ? true : nil
+                ))
             } catch {
                 reply(id, error: "Invalid initialize parameters.")
             }
@@ -374,6 +377,10 @@ public actor ExtensionRuntime {
 
     func listChanged(_ commandID: String) {
         notify(ExtensionMethod.listChanged, ExtensionListChangedParams(commandID: commandID))
+    }
+
+    func widgetChanged(_ widgetIDs: [String]?) {
+        notify(ExtensionMethod.widgetChanged, ExtensionWidgetChangedParams(widgetIDs: widgetIDs))
     }
 
     func log(_ message: String) {

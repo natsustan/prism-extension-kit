@@ -133,6 +133,7 @@ public enum ExtensionMethod {
     public static let stateWrite = "state.write"
     public static let taskStart = "task.start"
     public static let listChanged = "list.changed"
+    public static let widgetChanged = "widget.changed"
     public static let log = "log"
 }
 
@@ -181,9 +182,14 @@ public struct ExtensionInitializeParams: Hashable, Codable, Sendable {
 public struct ExtensionInitializeResult: Hashable, Codable, Sendable {
     /// The extension takes `preferences.update` while it runs.
     public let updatesPreferences: Bool?
+    /// The extension sends `widget.changed` when its widgets' data changes,
+    /// so Prism polls its visible widgets only now and then, to keep
+    /// relative times current. Without it Prism polls every few seconds.
+    public let notifiesWidgetChanges: Bool?
 
-    public init(updatesPreferences: Bool? = nil) {
+    public init(updatesPreferences: Bool? = nil, notifiesWidgetChanges: Bool? = nil) {
         self.updatesPreferences = updatesPreferences
+        self.notifiesWidgetChanges = notifiesWidgetChanges
     }
 }
 
@@ -267,6 +273,15 @@ public struct ExtensionListChangedParams: Hashable, Codable, Sendable {
     public let commandID: String
 
     public init(commandID: String) { self.commandID = commandID }
+}
+
+/// `widget.changed` (extension → Prism): the data behind some widgets
+/// changed, for example after a background refresh. Prism reloads those on
+/// screen and ignores the rest. `nil` means every widget of the extension.
+public struct ExtensionWidgetChangedParams: Hashable, Codable, Sendable {
+    public let widgetIDs: [String]?
+
+    public init(widgetIDs: [String]? = nil) { self.widgetIDs = widgetIDs }
 }
 
 public struct ExtensionWidgetParams: Hashable, Codable, Sendable {

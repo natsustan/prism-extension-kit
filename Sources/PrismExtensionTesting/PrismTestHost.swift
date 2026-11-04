@@ -5,7 +5,7 @@ import PrismExtensionProtocol
 /// Prism, played in memory, for an extension's own tests. It drives the
 /// extension through the same runtime and protocol messages Prism uses, and
 /// keeps what the extension asked of Prism: saved state, started tasks,
-/// changed lists, and log lines.
+/// changed lists and widgets, and log lines.
 ///
 ///     let prism = await PrismTestHost(MyExtension(), preferences: ["excited": .bool(true)])
 ///     #expect(try await prism.run("greet") == .keepOpen(message: "Hello!"))
@@ -39,6 +39,10 @@ public actor PrismTestHost {
     public private(set) var startedTasks: [TaskStart] = []
     /// `list.changed` notifications, in order.
     public private(set) var changedLists: [String] = []
+    /// `widget.changed` notifications, in order; `nil` names every widget.
+    public private(set) var changedWidgets: [[String]?] = []
+    /// What the extension's `initialize` reply declared.
+    public private(set) var initializeResult = ExtensionInitializeResult()
     /// `log` messages, in order.
     public private(set) var logs: [String] = []
 
@@ -96,10 +100,10 @@ public actor PrismTestHost {
     }
 
     private func initialize() async throws {
-        _ = try await request(ExtensionMethod.initialize, ExtensionInitializeParams(
+        initializeResult = try await request(ExtensionMethod.initialize, ExtensionInitializeParams(
             prismVersion: "test", extensionID: extensionID, preferences: preferences, state: state,
             dataDirectory: dataDirectory?.path, language: language
-        ))
+        )).decode(ExtensionInitializeResult.self)
     }
 
     // MARK: - Calls
@@ -197,6 +201,8 @@ public actor PrismTestHost {
                 startedTasks.append(TaskStart(taskID: start.taskID, arguments: start.arguments))
             case ExtensionMethod.listChanged:
                 changedLists.append(try params.decode(ExtensionListChangedParams.self).commandID)
+            case ExtensionMethod.widgetChanged:
+                changedWidgets.append(try params.decode(ExtensionWidgetChangedParams.self).widgetIDs)
             case ExtensionMethod.log:
                 logs.append(try params.decode(ExtensionLogParams.self).message)
             case ExtensionMethod.statusUpdate:

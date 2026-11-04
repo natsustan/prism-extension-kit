@@ -53,6 +53,12 @@ public protocol PrismExtension: Sendable {
     /// How often a visible live row is refreshed. `nil` refreshes it only
     /// after commands, which suits state the extension itself changes.
     var statusRefreshInterval: Duration? { get }
+
+    /// Whether the extension calls `context.widgetChanged` whenever its
+    /// widgets' data changes. Prism then reloads visible widgets on that
+    /// call and polls them only about once a minute; otherwise it polls
+    /// every few seconds.
+    var notifiesWidgetChanges: Bool { get }
 }
 
 public extension PrismExtension {
@@ -85,6 +91,8 @@ public extension PrismExtension {
     }
 
     var statusRefreshInterval: Duration? { nil }
+
+    var notifiesWidgetChanges: Bool { false }
 
     /// Runs the protocol loop on stdin and stdout until Prism ends it.
     static func main() async {
